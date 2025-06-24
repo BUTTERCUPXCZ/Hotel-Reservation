@@ -188,6 +188,7 @@ function DashboardContent() {
             <Link href="/rooms">
               <Button variant="ghost">Browse Rooms</Button>
             </Link>
+            <span className="font-medium">Hi, {user?.name || "Guest"}</span>
             <Button
               variant="outline"
               onClick={logout}
@@ -195,10 +196,6 @@ function DashboardContent() {
             >
               Log out
             </Button>
-            <Avatar>
-              <AvatarImage src={user?.avatar || "/placeholder.svg"} />
-              <AvatarFallback>{user?.name?.charAt(0) || "U"}</AvatarFallback>
-            </Avatar>
           </div>
         </div>
       </header>

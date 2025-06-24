@@ -4,44 +4,14 @@ import { Badge } from "@/components/ui/badge"
 import { MapPin, Users, Wifi, Car, Coffee, Shield, Star } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import { Navbar } from "@/components/navbar"
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">H</span>
-            </div>
-            <span className="text-xl font-bold">HostelHub</span>
-          </div>
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link href="/" className="text-sm font-medium">
-              Home
-            </Link>
-            <Link href="/rooms" className="text-sm font-medium text-muted-foreground">
-              Rooms
-            </Link>
-            <Link href="/about" className="text-sm font-medium text-muted-foreground">
-              About
-            </Link>
-            <Link href="/contact" className="text-sm font-medium text-muted-foreground">
-              Contact
-            </Link>
-          </nav>
-          <div className="flex items-center space-x-2">
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
-                Login
-              </Button>
-            </Link>
-            <Link href="/signup">
-              <Button size="sm">Sign Up</Button>
-            </Link>
-          </div>
-        </div>
+        <Navbar currentPath="/" />
       </header>
 
       {/* Hero Section */}

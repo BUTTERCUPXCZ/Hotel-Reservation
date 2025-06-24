@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import useAuth from '@/hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Card,
   CardHeader,
@@ -52,6 +52,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    console.log("Login form submitted with:", { email, password: "***" });
 
     if (!email) {
       setErrors((prev) => ({ ...prev, email: "Email is required" }));
@@ -62,13 +63,23 @@ export default function LoginPage() {
       return;
     }
 
-    const result = await login(email, password);
-    if (result.success) {
-      // Successfully logged in, will be redirected by the useEffect
-      // that watches for isAuthenticated state
-      router.push(redirectUrl);
-    } else {
-      setErrors({ submit: result.error || "Login failed" });
+    try {
+      console.log("Calling login function...");
+      const result = await login(email, password);
+      console.log("Login result:", result);
+
+      if (result.success) {
+        console.log("Login successful, redirecting to:", redirectUrl);
+        // Successfully logged in, will be redirected by the useEffect
+        // that watches for isAuthenticated state
+        router.push(redirectUrl);
+      } else {
+        console.error("Login failed:", result.error);
+        setErrors({ submit: result.error || "Login failed" });
+      }
+    } catch (error) {
+      console.error("Unexpected error during login:", error);
+      setErrors({ submit: "An unexpected error occurred" });
     }
   };
 

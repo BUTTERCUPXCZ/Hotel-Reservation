@@ -15,6 +15,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useGCashPayment } from "@/hooks/useGCashPayment"
 import AuthGuard from "@/components/auth-guard"
+import { Navbar } from "@/components/navbar"
 
 export default function BookingPage() {
   const [paymentMethod, setPaymentMethod] = useState("")
@@ -145,24 +146,7 @@ export default function BookingPage() {
       <div className="min-h-screen bg-background">
         {/* Header */}
         <header className="border-b">
-          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">H</span>
-              </div>
-              <span className="text-xl font-bold">HostelHub</span>
-            </Link>
-            <div className="flex items-center space-x-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Login
-                </Button>
-              </Link>
-              <Link href="/signup">
-                <Button size="sm">Sign Up</Button>
-              </Link>
-            </div>
-          </div>
+          <Navbar currentPath="/booking" />
         </header>
 
         <div className="container mx-auto px-4 py-8">

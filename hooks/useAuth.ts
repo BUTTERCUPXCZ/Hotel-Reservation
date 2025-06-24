@@ -36,26 +36,46 @@ export function useAuth() {
 
     checkAuthStatus();
   }, []);
-
   // Login function
   const login = async (email: string, password: string) => {
     try {
+      console.log('Login function called with:', { email });
       setIsLoading(true);
+
+      console.log('Calling loginMutation...');
       const result = await loginMutation({ email, password });
+      console.log('Login mutation result:', result);
 
       if (result.status === 'success') {
+        console.log('Login successful, saving user to localStorage');
         // Save user in localStorage
         localStorage.setItem('user', JSON.stringify(result.user));
         setUser(result.user);
         setIsAuthenticated(true);
+        console.log('Auth state updated:', { user: result.user, isAuthenticated: true });
         return { success: true };
       }
 
+      console.log('Login failed, status not success:', result);
       return { success: false, error: 'Login failed' };
     } catch (error: any) {
+      console.error('Login error:', error);
+      // Get more detailed error information
+      const errorMessage = error.message ||
+        (error.data && error.data.message) ||
+        (error.shape && error.shape.message) ||
+        'Login failed';
+
+      console.error('Login error details:', {
+        message: errorMessage,
+        code: error.code,
+        data: error.data,
+        shape: error.shape
+      });
+
       return {
         success: false,
-        error: error.message || 'Login failed'
+        error: errorMessage
       };
     } finally {
       setIsLoading(false);
@@ -105,7 +125,6 @@ export function useAuth() {
     setIsAuthenticated(false);
     router.push('/login');
   };
-
   return {
     user,
     isLoading,
@@ -116,4 +135,5 @@ export function useAuth() {
   };
 }
 
-export default useAuth;
+// Only export as named export to avoid import confusion
+// export default useAuth;

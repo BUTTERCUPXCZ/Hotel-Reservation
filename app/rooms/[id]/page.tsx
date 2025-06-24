@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { RoomDetailsSkeleton } from "@/components/loading-states"
 import { useAuth } from "@/hooks/useAuth"
+import { Navbar } from "@/components/navbar"
 import {
   MapPin,
   Users,
@@ -269,24 +270,7 @@ export default function RoomDetailsPage() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">H</span>
-            </div>
-            <span className="text-xl font-bold">HostelHub</span>
-          </Link>
-          <div className="flex items-center space-x-2">
-            <Link href="/login">
-              <Button variant="ghost" size="sm">
-                Login
-              </Button>
-            </Link>
-            <Link href="/signup">
-              <Button size="sm">Sign Up</Button>
-            </Link>
-          </div>
-        </div>
+        <Navbar currentPath={`/rooms/${roomId}`} />
       </header>
 
       {/* Breadcrumb */}

@@ -12,9 +12,7 @@ export const authRouter = router({
 
     getSecretMessage: protectedProcedure.query(() => {
         return "You are logged in and can see this secret message!";
-    }),
-
-    register: publicProcedure
+    }), register: publicProcedure
         .input(
             z.object({
                 firstname: z.string().min(1, "First name is required"),
@@ -24,7 +22,7 @@ export const authRouter = router({
             })
         )
         .mutation(async ({ ctx, input }) => {
-            console.log("Register mutation started");
+            console.log("Register mutation started for:", input.email);
 
             if (!ctx.db) {
                 console.error("Database connection not available");
@@ -65,7 +63,7 @@ export const authRouter = router({
                     },
                 });
 
-                console.log("User created successfully");
+                console.log("User created successfully:", newUser.id);
                 // Return success response (without password)
                 return {
                     status: "success",
@@ -74,6 +72,7 @@ export const authRouter = router({
                         firstname: newUser.firstname,
                         lastname: newUser.lastname,
                         email: newUser.email,
+                        name: `${newUser.firstname} ${newUser.lastname}`,
                     },
                 };
             } catch (error: any) {
@@ -98,59 +97,65 @@ export const authRouter = router({
                     message: "Failed to register user: " + (error.message || "Unknown error"),
                 });
             }
-        }),
+        }), login: publicProcedure
+            .input(
+                z.object({
+                    email: z.string().email("Invalid email address"),
+                    password: z.string().min(1, "Password is required"),
+                })
+            )
+            .mutation(async ({ ctx, input }) => {
+                console.log("Login attempt for:", input.email);
+                try {
+                    // Check if user exists
+                    console.log("Checking if user exists...");
+                    const user = await ctx.db.user.findUnique({
+                        where: { email: input.email },
+                    });
 
-    login: publicProcedure
-        .input(
-            z.object({
-                email: z.string().email("Invalid email address"),
-                password: z.string().min(1, "Password is required"),
-            })
-        )
-        .mutation(async ({ ctx, input }) => {
-            try {
-                // Check if user exists
-                const user = await ctx.db.user.findUnique({
-                    where: { email: input.email },
-                });
+                    if (!user) {
+                        console.log("User not found:", input.email);
+                        throw new TRPCError({
+                            code: "NOT_FOUND",
+                            message: "User not found",
+                        });
+                    }
 
-                if (!user) {
+                    console.log("User found, verifying password...");
+                    // Verify password
+                    const isPasswordValid = await bcrypt.compare(input.password, user.password);
+                    if (!isPasswordValid) {
+                        console.log("Invalid password for:", input.email);
+                        throw new TRPCError({
+                            code: "UNAUTHORIZED",
+                            message: "Invalid password",
+                        });
+                    }
+
+                    console.log("Login successful for:", input.email);
+                    // Return success with user data (without password)
+                    return {
+                        status: "success",
+                        user: {
+                            id: user.id,
+                            firstname: user.firstname,
+                            lastname: user.lastname,
+                            email: user.email,
+                            name: user.firstname && user.lastname ? `${user.firstname} ${user.lastname}` : undefined,
+                        },
+                    };
+                } catch (error) {
+                    // Handle errors
+                    if (error instanceof TRPCError) {
+                        console.error("TRPC Login error:", error.code, error.message);
+                        throw error;
+                    }
+
+                    console.error("Login error:", error);
                     throw new TRPCError({
-                        code: "NOT_FOUND",
-                        message: "User not found",
+                        code: "INTERNAL_SERVER_ERROR",
+                        message: "Failed to log in",
                     });
                 }
-
-                // Verify password
-                const isPasswordValid = await bcrypt.compare(input.password, user.password);
-                if (!isPasswordValid) {
-                    throw new TRPCError({
-                        code: "UNAUTHORIZED",
-                        message: "Invalid password",
-                    });
-                }
-
-                // Return success with user data (without password)
-                return {
-                    status: "success",
-                    user: {
-                        id: user.id,
-                        firstname: user.firstname,
-                        lastname: user.lastname,
-                        email: user.email,
-                    },
-                };
-            } catch (error) {
-                // Handle errors
-                if (error instanceof TRPCError) {
-                    throw error;
-                }
-
-                console.error("Login error:", error);
-                throw new TRPCError({
-                    code: "INTERNAL_SERVER_ERROR",
-                    message: "Failed to log in",
-                });
-            }
-        }),
+            }),
 });
