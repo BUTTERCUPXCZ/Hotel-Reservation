@@ -1,0 +1,87 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  firstname String?
+  lastname  String?
+  email     String    @unique
+  password  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  bookings  Booking[]
+}
+
+model RoomType {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  rooms       Room[]
+}
+
+model Room {
+  id            String      @id @default(uuid())
+  name          String
+  description   String?
+  pricePerNight Float
+  maxOccupancy  Int
+  isActive      Boolean     @default(true)
+  roomTypeId    String
+  roomType      RoomType    @relation(fields: [roomTypeId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  bookings      Booking[]
+  amenities     Amenity[]
+  images        RoomImage[]
+}
+
+model RoomImage {
+  id        String   @id @default(uuid())
+  url       String
+  alt       String?
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Amenity {
+  id        String   @id @default(uuid())
+  name      String
+  icon      String?
+  rooms     Room[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Booking {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [email])
+  roomId          String
+  room            Room     @relation(fields: [roomId], references: [id])
+  checkInDate     DateTime
+  checkOutDate    DateTime
+  guestCount      Int
+  totalAmount     Float
+  status          String // PENDING, CONFIRMED, CANCELLED, COMPLETED
+  specialRequests String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
