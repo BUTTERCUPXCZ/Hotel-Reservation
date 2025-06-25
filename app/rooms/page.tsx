@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,9 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { RoomCardSkeleton } from "@/components/loading-states"
 import { useAuth } from "@/hooks/useAuth"
 import { Navbar } from "@/components/navbar"
+import { useRooms } from "@/hooks/useRooms"
+import { useToast } from "@/components/ui/use-toast"
+import { Toaster } from "@/components/ui/toaster"
 import {
   MapPin,
   Users,
@@ -35,176 +38,215 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 
+// Define types for database Room and UI Room
+interface DBRoom {
+  id: string;
+  name: string;
+  description: string | null;
+  pricePerNight: number;
+  maxOccupancy: number;
+  isActive: boolean;
+  numberofrooms: number;
+  roomTypeId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  amenities: string | null;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  roomType: {
+    id: string;
+    name: string;
+  };
+}
+
+interface UIRoom {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  originalPrice?: number;
+  rating: number;
+  reviewCount: number;
+  image: string;
+  images: string[];
+  capacity: number;
+  floor: string;
+  size: string;
+  bedType: string;
+  amenities: string[];
+  features: string[];
+  popular?: boolean;
+  discount?: number;
+  availability: string;
+  roomType: string;
+}
+
 export default function RoomsPage() {
   const [priceRange, setPriceRange] = useState([500, 3000])
   const [showFilters, setShowFilters] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [favorites, setFavorites] = useState<string[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [rooms, setRooms] = useState<any[]>([])
   const [bookingLoading, setBookingLoading] = useState<string | null>(null)
+  const [visibleRooms, setVisibleRooms] = useState(6)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const { isAuthenticated } = useAuth()
   const router = useRouter()
+  const { toast } = useToast()
 
-  // Simulate loading rooms data
-  useEffect(() => {
-    const loadRooms = async () => {
-      setIsLoading(true)
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+  // Use our custom rooms hook for data fetching and real-time updates
+  const {
+    data: roomsData,
+    isLoading,
+    error,
+    refetchRooms,
+    lastBookedRoomId
+  } = useRooms();
 
-      const mockRooms = [
-        {
-          id: "dorm-4",
-          name: "Shared Dorm (4 beds)",
-          description: "Perfect for budget travelers looking for a social experience",
-          price: 800,
-          originalPrice: 1000,
-          rating: 4.8,
-          reviewCount: 124,
-          image: "/placeholder.svg?height=300&width=400",
-          images: ["/placeholder.svg?height=300&width=400", "/placeholder.svg?height=300&width=400"],
-          capacity: 4,
-          floor: "2nd Floor",
-          size: "20 sqm",
-          amenities: ["Free WiFi", "Air Conditioning", "Shared Bathroom", "Lockers", "Reading Light"],
-          features: ["wifi", "ac", "bathroom", "security"],
-          popular: true,
-          discount: 20,
-          availability: "3 beds left",
-        },
-        {
-          id: "dorm-6",
-          name: "Shared Dorm (6 beds)",
-          description: "Great value accommodation with modern facilities",
-          price: 650,
-          originalPrice: 750,
-          rating: 4.6,
-          reviewCount: 89,
-          image: "/placeholder.svg?height=300&width=400",
-          images: ["/placeholder.svg?height=300&width=400"],
-          capacity: 6,
-          floor: "2nd Floor",
-          size: "25 sqm",
-          amenities: ["Free WiFi", "Air Conditioning", "Shared Bathroom", "Lockers"],
-          features: ["wifi", "ac", "bathroom"],
-          discount: 13,
-          availability: "5 beds left",
-        },
-        {
-          id: "private",
-          name: "Private Room",
-          description: "Your own private sanctuary with premium amenities",
-          price: 1500,
-          rating: 4.9,
-          reviewCount: 67,
-          image: "/placeholder.svg?height=300&width=400",
-          images: ["/placeholder.svg?height=300&width=400"],
-          capacity: 2,
-          floor: "3rd Floor",
-          size: "15 sqm",
-          amenities: ["Free WiFi", "Air Conditioning", "Private Bathroom", "TV", "Mini Fridge"],
-          features: ["wifi", "ac", "bathroom", "tv", "fridge"],
-          availability: "2 rooms left",
-        },
-        {
-          id: "deluxe",
-          name: "Deluxe Private Room",
-          description: "Premium comfort with luxury touches and city views",
-          price: 2000,
-          rating: 4.9,
-          reviewCount: 45,
-          image: "/placeholder.svg?height=300&width=400",
-          images: ["/placeholder.svg?height=300&width=400"],
-          capacity: 2,
-          floor: "4th Floor",
-          size: "18 sqm",
-          amenities: ["Free WiFi", "Air Conditioning", "Private Bathroom", "TV", "Mini Fridge", "City View"],
-          features: ["wifi", "ac", "bathroom", "tv", "fridge"],
-          availability: "1 room left",
-        },
-        {
-          id: "family",
-          name: "Family Room",
-          description: "Spacious accommodation perfect for families and groups",
-          price: 2200,
-          rating: 4.7,
-          reviewCount: 78,
-          image: "/placeholder.svg?height=300&width=400",
-          images: ["/placeholder.svg?height=300&width=400"],
-          capacity: 6,
-          floor: "1st Floor",
-          size: "30 sqm",
-          amenities: ["Free WiFi", "Air Conditioning", "Private Bathroom", "TV", "Kitchenette", "Balcony"],
-          features: ["wifi", "ac", "bathroom", "tv", "kitchen"],
-          availability: "Available",
-        },
-        {
-          id: "suite",
-          name: "Executive Suite",
-          description: "Luxury accommodation with premium amenities and services",
-          price: 3500,
-          rating: 5.0,
-          reviewCount: 23,
-          image: "/placeholder.svg?height=300&width=400",
-          images: ["/placeholder.svg?height=300&width=400"],
-          capacity: 4,
-          floor: "5th Floor",
-          size: "35 sqm",
-          amenities: [
-            "Free WiFi",
-            "Air Conditioning",
-            "Private Bathroom",
-            "TV",
-            "Mini Fridge",
-            "Balcony",
-            "Room Service",
-          ],
-          features: ["wifi", "ac", "bathroom", "tv", "fridge", "balcony"],
-          availability: "Available",
-        },
-      ]
+  const errorMessage = error?.message;// Transform the data to match the UI expectations with memoization
+  const rooms: UIRoom[] = useMemo(() => {
+    if (!roomsData) return [];
 
-      setRooms(mockRooms)
-      setIsLoading(false)
-    }
+    return roomsData.map((room: DBRoom) => {
+      // Safely parse amenities JSON string or provide default
+      let amenitiesArray: string[] = ["Free WiFi", "Air Conditioning"];
+      let featuresArray: string[] = ["wifi", "ac"]; if (room.amenities) {
+        try {
+          // Check if it's a JSON string
+          if (room.amenities.startsWith('[') && room.amenities.endsWith(']')) {
+            amenitiesArray = JSON.parse(room.amenities);
+          } else {
+            // If not valid JSON, treat as comma-separated string
+            amenitiesArray = room.amenities.split(',').map(item => item.trim());
+          }
 
-    loadRooms()
-  }, [])
+          // Create a map for feature lookups
+          const featureMap: Record<string, string> = {
+            wifi: 'wifi',
+            internet: 'wifi',
+            air: 'ac',
+            conditioning: 'ac',
+            bath: 'bathroom',
+            tv: 'tv',
+            television: 'tv',
+            kitchen: 'kitchen',
+            parking: 'parking'
+          };
+
+          featuresArray = amenitiesArray
+            .map((amenity: string) => {
+              const lowercaseAmenity = amenity.toLowerCase();
+              for (const [keyword, feature] of Object.entries(featureMap)) {
+                if (lowercaseAmenity.includes(keyword)) return feature;
+              }
+              return '';
+            })
+            .filter(Boolean);
+        } catch (e) {
+          console.error("Failed to parse amenities:", e);
+          // Fallback to treating it as a single item
+          if (typeof room.amenities === 'string') {
+            amenitiesArray = [room.amenities];
+          }
+        }
+      } return {
+        id: room.id,
+        name: room.name,
+        description: room.description || "Comfortable room with amenities",
+        price: room.pricePerNight,
+        rating: 4.8,
+        reviewCount: 45,
+        image: room.imageUrl || "/placeholder.svg?height=300&width=400",
+        images: [room.imageUrl || "/placeholder.svg?height=300&width=400"],
+        capacity: room.maxOccupancy,
+        floor: `${Math.floor(Math.random() * 5) + 1}nd Floor`,
+        size: `${room.maxOccupancy * 5} sqm`,
+        bedType: room.roomType?.name || (room.maxOccupancy > 1 ? "Double/Twin" : "Single"),
+        amenities: amenitiesArray,
+        features: [...new Set(featuresArray)], // Remove duplicates
+        availability: `${room.numberofrooms} room${room.numberofrooms !== 1 ? 's' : ''} left`,
+        roomType: room.roomType?.name || "Standard Room",
+      };
+    });
+  }, [roomsData]);
+  // Memoize the feature icons for better performance
+  const featureIconsMap = useMemo(() => ({
+    wifi: <Wifi className="w-4 h-4" />,
+    ac: <Snowflake className="w-4 h-4" />,
+    bathroom: <Bath className="w-4 h-4" />,
+    tv: <Tv className="w-4 h-4" />,
+    security: <Shield className="w-4 h-4" />,
+    parking: <Car className="w-4 h-4" />,
+    kitchen: <Coffee className="w-4 h-4" />,
+  }), []);
 
   const getFeatureIcon = (feature: string) => {
-    const icons = {
-      wifi: <Wifi className="w-4 h-4" />,
-      ac: <Snowflake className="w-4 h-4" />,
-      bathroom: <Bath className="w-4 h-4" />,
-      tv: <Tv className="w-4 h-4" />,
-      security: <Shield className="w-4 h-4" />,
-      parking: <Car className="w-4 h-4" />,
-      kitchen: <Coffee className="w-4 h-4" />,
-    }
-    return icons[feature as keyof typeof icons] || null
+    return featureIconsMap[feature as keyof typeof featureIconsMap] || null;
   }
 
   const toggleFavorite = (roomId: string) => {
     setFavorites((prev) => (prev.includes(roomId) ? prev.filter((id) => id !== roomId) : [...prev, roomId]))
   }
-
   const handleBookNow = async (roomId: string) => {
     if (!isAuthenticated) {
-      router.push(`/login?redirect=/booking?room=${roomId}`)
-      return
+      router.push(`/login?redirect=/booking?roomId=${roomId}`);
+      return;
     }
 
-    setBookingLoading(roomId)
-    // Simulate booking process
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    router.push(`/booking?room=${roomId}`)
-    setBookingLoading(null)
+    try {
+      setBookingLoading(roomId);
+      // Get today and tomorrow's date in YYYY-MM-DD format
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const checkIn = today.toISOString().split('T')[0];
+      const checkOut = tomorrow.toISOString().split('T')[0];
+
+      // Navigate to booking page with the room ID and default dates
+      router.push(`/booking?roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=1`);
+    } catch (error) {
+      console.error("Error navigating to booking page:", error);
+    } finally {
+      // Ensure loading state is cleared even if there's an error
+      setBookingLoading(null);
+    }
   }
 
+  // Effect to refetch data when returning to this page after booking
+  useEffect(() => {
+    // Check if the page is becoming visible again (user returns from booking page)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refetchRooms();
+      }
+    };
+
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Clean up event listener
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refetchRooms]);
+
+  // Show toast notification when room count changes
+  useEffect(() => {
+    if (lastBookedRoomId) {
+      const bookedRoom = rooms.find(room => room.id === lastBookedRoomId);
+      if (bookedRoom) {
+        toast({
+          title: "Room availability updated",
+          description: `${bookedRoom.name} has been booked. ${bookedRoom.availability}`,
+          duration: 3000,
+        });
+      }
+    }
+  }, [lastBookedRoomId, rooms]);
   return (
     <div className="min-h-screen bg-gray-50">
+      <Toaster />
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-40">
         <Navbar currentPath="/rooms" />
@@ -344,6 +386,17 @@ export default function RoomsPage() {
               ))}
             </div>
           </div>
+        ) : errorMessage ? (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium mb-2">Error loading rooms</h3>
+            <p className="text-gray-500 mb-6">There was a problem fetching the room data.</p>
+            <Button onClick={() => window.location.reload()}>Try Again</Button>
+          </div>
         ) : (
           <>
             {/* Results Header */}
@@ -371,10 +424,10 @@ export default function RoomsPage() {
             </div>
 
             {/* Rooms Grid */}
-            <div
+            {rooms.length > 0 ? (<div
               className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}
             >
-              {rooms.map((room) => (
+              {rooms.slice(0, visibleRooms).map((room: UIRoom) => (
                 <Card key={room.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300 group">
                   <div className="relative">
                     <div className="relative h-64 overflow-hidden">
@@ -408,34 +461,31 @@ export default function RoomsPage() {
                     </div>
                   </div>
 
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-primary transition-colors">
-                          {room.name}
-                        </h3>
-                        <p className="text-sm text-gray-600 mb-2">{room.description}</p>
-                      </div>
-                      <div className="flex items-center ml-4">
-                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 mr-1" />
-                        <span className="font-medium text-sm">{room.rating}</span>
-                        <span className="text-xs text-gray-500 ml-1">({room.reviewCount})</span>
-                      </div>
-                    </div>
-
-                    {/* Room Details */}
-                    <div className="grid grid-cols-3 gap-4 mb-4 text-sm text-gray-600">
+                  <CardContent className="p-6">                    <div className="flex items-start justify-between mb-3">                    <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-primary transition-colors">
+                      {room.roomType}
+                    </h3>
+                    <div className="flex items-center mb-1">
+                      <Badge variant="outline" className="text-xs font-medium bg-blue-50 text-blue-700 border-blue-200">
+                        Room {room.name}
+                      </Badge>
+                    </div>                    <p className="text-sm text-gray-600 mb-2">{room.description}</p>
+                  </div>
+                  </div>                    {/* Room Details */}
+                    <div className="grid grid-cols-1 gap-4 mb-4 text-sm text-gray-600">
                       <div className="flex items-center">
                         <Users className="w-4 h-4 mr-1" />
                         <span>{room.capacity} guests</span>
                       </div>
-                      <div className="flex items-center">
-                        <MapPin className="w-4 h-4 mr-1" />
-                        <span>{room.floor}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-medium">{room.size}</span>
-                      </div>
+                    </div>{/* Bed Type */}
+                    <div className="flex items-center mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-gray-500">
+                        <path d="M2 4v16"></path>
+                        <path d="M2 8h18a2 2 0 0 1 2 2v10"></path>
+                        <path d="M2 17h20"></path>
+                        <path d="M6 8v9"></path>
+                      </svg>
+                      <span className="text-sm font-medium">{room.bedType}</span>
                     </div>
 
                     {/* Features */}
@@ -458,8 +508,8 @@ export default function RoomsPage() {
                       <Badge
                         variant="secondary"
                         className={`text-xs ${room.availability.includes("left")
-                            ? "bg-orange-100 text-orange-800"
-                            : "bg-green-100 text-green-800"
+                          ? "bg-orange-100 text-orange-800"
+                          : "bg-green-100 text-green-800"
                           }`}
                       >
                         {room.availability}
@@ -482,11 +532,13 @@ export default function RoomsPage() {
                         <span className="text-sm text-gray-600">per night</span>
                       </div>
                       <div className="flex space-x-2">
-                        <Link href={`/rooms/${room.id}`}>
-                          <Button variant="outline" size="sm">
-                            Details
-                          </Button>
-                        </Link>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/rooms/${room.id}`)}
+                        >
+                          Details
+                        </Button>
                         <Button size="sm" onClick={() => handleBookNow(room.id)} disabled={bookingLoading === room.id}>
                           {bookingLoading === room.id ? (
                             <>
@@ -501,15 +553,49 @@ export default function RoomsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
+              ))}            </div>
+            ) : !roomsData ? (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium mb-2">Error loading rooms</h3>
+                <p className="text-gray-500 mb-6">There was a problem fetching room data from the server.</p>
+                <p className="text-sm text-gray-500 mb-6">{errorMessage ? `Error: ${errorMessage}` : "No room data available"}</p>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </div>
+            ) : null}
 
             {/* Load More */}
-            <div className="text-center mt-12">
-              <Button variant="outline" size="lg">
-                Load More Rooms
+            {rooms.length > 0 && rooms.length > visibleRooms && (
+              <div className="text-center mt-12">                <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {
+                  setIsLoadingMore(true);
+                  // Simply update state without using setTimeout, since this is a client-side operation
+                  // that doesn't actually need to wait for a server response
+                  setVisibleRooms((prev) => prev + 3);
+                  // Use requestAnimationFrame to ensure UI updates before turning off loading state
+                  requestAnimationFrame(() => {
+                    setIsLoadingMore(false);
+                  });
+                }}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? (
+                  <>
+                    <LoadingSpinner size="sm" className="mr-2" />
+                    Loading...
+                  </>
+                ) : (
+                  `Load More Rooms (${visibleRooms}/${rooms.length})`
+                )}
               </Button>
-            </div>
+              </div>
+            )}
           </>
         )}
       </div>

@@ -11,6 +11,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { RoomDetailsSkeleton } from "@/components/loading-states"
 import { useAuth } from "@/hooks/useAuth"
 import { Navbar } from "@/components/navbar"
+import { trpc } from "@/hooks/trpc"
 import {
   MapPin,
   Users,
@@ -31,8 +32,54 @@ import {
   CheckCircle,
 } from "lucide-react"
 import Link from "next/link"
-import Image from "next/image"
 import { useParams, useRouter } from "next/navigation"
+
+interface DBRoom {
+  id: string;
+  name: string;
+  description: string | null;
+  pricePerNight: number;
+  maxOccupancy: number;
+  isActive: boolean;
+  numberofrooms: number;
+  roomTypeId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  amenities: string | null;
+  imageUrl: string | null;
+  imageAlt: string | null;
+  roomType: {
+    id: string;
+    name: string;
+  };
+}
+
+interface UIRoomDetails {
+  id: string;
+  name: string;
+  description: string;
+  longDescription: string;
+  price: number;
+  originalPrice?: number;
+  images: string[];
+  capacity: number;
+  bedType: string;
+  roomType: string;
+  checkInTime: string;
+  checkOutTime: string;
+  amenities: {
+    name: string;
+    icon: string;
+    description: string;
+  }[];
+  features: string[];
+  policies: string[];
+  location: {
+    address: string;
+    nearby: string[];
+  };
+  availability: string;
+}
 
 export default function RoomDetailsPage() {
   const params = useParams()
@@ -43,75 +90,143 @@ export default function RoomDetailsPage() {
   const [checkIn, setCheckIn] = useState("")
   const [checkOut, setCheckOut] = useState("")
   const [guests, setGuests] = useState(1)
+  const [adults, setAdults] = useState(1)
+  const [children, setChildren] = useState(0)
   const [isFavorite, setIsFavorite] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [room, setRoom] = useState<any>(null)
+  const [room, setRoom] = useState<UIRoomDetails | null>(null)
   const [bookingLoading, setBookingLoading] = useState(false)
 
   const { isAuthenticated } = useAuth()
 
-  // Simulate loading room data
-  useEffect(() => {
-    const loadRoom = async () => {
-      setIsLoading(true)
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      // Mock room data - in real app, this would come from API based on roomId
-      const mockRoom = {
-        id: roomId,
-        name: "Shared Dorm (4 beds)",
-        description: "Perfect for budget travelers looking for a social experience in the heart of the city",
-        longDescription:
-          "Our shared dorm rooms offer the perfect balance of comfort, affordability, and social interaction. Each bed comes with privacy curtains, personal reading light, and secure locker. The room features modern air conditioning, high-speed WiFi, and is cleaned daily by our housekeeping team.",
-        price: 800,
-        originalPrice: 1000,
-        rating: 4.8,
-        reviewCount: 124,
-        images: [
-          "/placeholder.svg?height=400&width=600&text=Room+Interior",
-          "/placeholder.svg?height=400&width=600&text=Bathroom",
-          "/placeholder.svg?height=400&width=600&text=Common+Area",
-          "/placeholder.svg?height=400&width=600&text=Exterior+View",
-        ],
-        capacity: 4,
-        floor: "2nd Floor",
-        size: "20 sqm",
-        bedType: "Bunk beds with privacy curtains",
-        checkInTime: "3:00 PM",
-        checkOutTime: "11:00 AM",
-        amenities: [
-          { name: "Free WiFi", icon: "wifi", description: "High-speed internet throughout the property" },
-          { name: "Air Conditioning", icon: "ac", description: "Climate controlled for your comfort" },
-          { name: "Shared Bathroom", icon: "bathroom", description: "Clean, modern shared facilities" },
-          { name: "Security Lockers", icon: "security", description: "Secure storage for your belongings" },
-          { name: "Reading Light", icon: "light", description: "Personal LED reading light for each bed" },
-          { name: "Privacy Curtains", icon: "curtain", description: "Individual privacy curtains for each bed" },
-        ],
-        features: ["wifi", "ac", "bathroom", "security", "parking", "coffee"],
-        policies: [
-          "Check-in: 3:00 PM - 11:00 PM",
-          "Check-out: 8:00 AM - 11:00 AM",
-          "Quiet hours: 10:00 PM - 8:00 AM",
-          "No smoking inside the property",
-          "Maximum 2 guests per booking",
-          "Valid ID required at check-in",
-        ],
-        location: {
-          address: "123 Hostel Street, Makati City, Metro Manila",
-          nearby: ["Mall of Asia - 2km", "Rizal Park - 1.5km", "Airport - 15km", "Train Station - 500m"],
-        },
-        availability: "3 beds available",
-        popular: true,
-        discount: 20,
-      }
-
-      setRoom(mockRoom)
-      setIsLoading(false)
+  // Fetch room data from the database using tRPC
+  const {
+    data: roomData,
+    isLoading,
+    error
+  } = trpc.rooms.getRoomById.useQuery(
+    { id: roomId },
+    {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      enabled: !!roomId
     }
+  );
 
-    loadRoom()
-  }, [roomId])
+  // Transform database room data to the UI format once data is loaded
+  useEffect(() => {
+    if (roomData) {
+      try {
+        // Parse amenities JSON string or provide default
+        let amenitiesArray: string[] = ["Free WiFi", "Air Conditioning"];
+        let featuresArray: string[] = ["wifi", "ac"];
+
+        if (roomData.amenities) {
+          // Check if the amenities is already a string array or parse JSON if it's a JSON string
+          try {
+            // Check if it's a JSON string
+            if (roomData.amenities.startsWith('[') && roomData.amenities.endsWith(']')) {
+              amenitiesArray = JSON.parse(roomData.amenities);
+            } else {
+              // If not valid JSON, treat as comma-separated string
+              amenitiesArray = roomData.amenities.split(',').map(item => item.trim());
+            }
+
+            const featureMap: Record<string, string> = {
+              wifi: 'wifi',
+              internet: 'wifi',
+              air: 'ac',
+              conditioning: 'ac',
+              bath: 'bathroom',
+              tv: 'tv',
+              television: 'tv',
+              kitchen: 'kitchen',
+              parking: 'parking',
+              security: 'security'
+            };
+
+            featuresArray = amenitiesArray
+              .map((amenity: string) => {
+                const lowercaseAmenity = amenity.toLowerCase();
+                for (const [keyword, feature] of Object.entries(featureMap)) {
+                  if (lowercaseAmenity.includes(keyword)) return feature;
+                }
+                return '';
+              })
+              .filter(Boolean);
+          } catch (e) {
+            console.error("Failed to parse amenities:", e);
+            // Fallback to treating it as a single item
+            if (typeof roomData.amenities === 'string') {
+              amenitiesArray = [roomData.amenities];
+            }
+          }
+        }
+
+        // Format amenities as objects with name, icon, and description
+        const formattedAmenities = amenitiesArray.map(amenity => {
+          let icon = 'wifi'; // default icon
+          if (amenity.toLowerCase().includes('wifi')) icon = 'wifi';
+          if (amenity.toLowerCase().includes('air')) icon = 'ac';
+          if (amenity.toLowerCase().includes('bath')) icon = 'bathroom';
+          if (amenity.toLowerCase().includes('tv')) icon = 'tv';
+          if (amenity.toLowerCase().includes('security')) icon = 'security';
+          if (amenity.toLowerCase().includes('parking')) icon = 'parking';
+          if (amenity.toLowerCase().includes('kitchen')) icon = 'coffee';
+
+          return {
+            name: amenity,
+            icon,
+            description: `${amenity} available in this room`
+          };
+        });
+
+        const transformedRoom: UIRoomDetails = {
+          id: roomData.id,
+          name: roomData.name,
+          description: roomData.description || "Comfortable accommodation with modern amenities",
+          longDescription: roomData.description || "This room offers a comfortable stay with all the amenities you need for a pleasant experience. The property features modern facilities and is maintained to high standards of cleanliness and comfort.",
+          price: roomData.pricePerNight,
+          images: roomData.imageUrl ?
+            [
+              roomData.imageUrl,
+              "/placeholder.svg?height=400&width=600&text=Room+Interior",
+              "/placeholder.svg?height=400&width=600&text=Bathroom",
+              "/placeholder.svg?height=400&width=600&text=Room+View"
+            ] :
+            [
+              "/placeholder.svg?height=400&width=600&text=Room+Interior",
+              "/placeholder.svg?height=400&width=600&text=Bathroom",
+              "/placeholder.svg?height=400&width=600&text=Room+View",
+              "/placeholder.svg?height=400&width=600&text=Amenities"
+            ],
+          capacity: roomData.maxOccupancy,
+          bedType: roomData.roomType?.name || (roomData.maxOccupancy > 1 ? "Double/Twin" : "Single"),
+          roomType: roomData.roomType?.name || "Standard Room",
+          checkInTime: "2:00 PM",
+          checkOutTime: "12:00 PM",
+          amenities: formattedAmenities,
+          features: [...new Set(featuresArray)], // Remove duplicates
+          policies: [
+            "Check-in: 2:00 PM - 10:00 PM",
+            "Check-out: 11:00 AM - 12:00 PM",
+            "Quiet hours: 10:00 PM - 7:00 AM",
+            "No smoking inside the property",
+            `Maximum ${roomData.maxOccupancy} guests per room`,
+            "Valid ID required at check-in",
+          ],
+          location: {
+            address: "123 Hostel Street, Makati City, Metro Manila",
+            nearby: ["Mall of Asia - 2km", "Rizal Park - 1.5km", "Airport - 15km", "Train Station - 500m"],
+          },
+          availability: `${roomData.numberofrooms} room${roomData.numberofrooms !== 1 ? 's' : ''} left`,
+        };
+
+        setRoom(transformedRoom);
+      } catch (error) {
+        console.error("Error transforming room data:", error);
+      }
+    }
+  }, [roomData]);
 
   const reviews = [
     {
@@ -191,16 +306,27 @@ export default function RoomDetailsPage() {
   }
 
   const handleReserveNow = async () => {
-    if (!isAuthenticated) {
-      router.push(`/login?redirect=/booking?room=${roomId}&checkin=${checkIn}&checkout=${checkOut}&guests=${guests}`)
-      return
+    if (!checkIn || !checkOut) {
+      return; // Don't proceed if dates aren't selected
     }
 
-    setBookingLoading(true)
-    // Simulate booking process
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    router.push(`/booking?room=${roomId}&checkin=${checkIn}&checkout=${checkOut}&guests=${guests}`)
-    setBookingLoading(false)
+    if (!isAuthenticated) {
+      router.push(`/login?redirect=/booking?roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${adults + children}`);
+      return;
+    }
+
+    try {
+      setBookingLoading(true);
+
+      // Navigate to booking page with all required parameters
+      router.push(
+        `/booking?roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${adults + children}`
+      );
+    } catch (error) {
+      console.error("Error navigating to booking page:", error);
+    } finally {
+      setBookingLoading(false);
+    }
   }
 
   if (isLoading) {
@@ -286,7 +412,7 @@ export default function RoomDetailsPage() {
               Rooms
             </Link>
             <ChevronRight className="w-4 h-4" />
-            <span className="text-foreground font-medium">{room.name}</span>
+            <span className="text-foreground font-medium">{room.roomType}</span>
           </nav>
         </div>
       </div>
@@ -295,17 +421,13 @@ export default function RoomDetailsPage() {
         {/* Room Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6">
           <div className="mb-4 lg:mb-0">
-            <div className="flex items-center space-x-2 mb-2">
-              {room.popular && <Badge className="bg-orange-500">Popular</Badge>}
-              {room.discount && <Badge className="bg-red-500">-{room.discount}% OFF</Badge>}
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{room.roomType}</h1>
+            <div className="flex items-center mb-2">
+              <Badge variant="outline" className="text-xs font-medium bg-blue-50 text-blue-700 border-blue-200">
+                Room {room.name}
+              </Badge>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{room.name}</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
-              <div className="flex items-center">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 mr-1" />
-                <span className="font-medium">{room.rating}</span>
-                <span className="ml-1">({room.reviewCount} reviews)</span>
-              </div>
               <div className="flex items-center">
                 <MapPin className="w-4 h-4 mr-1" />
                 <span>{room.location.address}</span>
@@ -335,11 +457,10 @@ export default function RoomDetailsPage() {
             {/* Image Gallery */}
             <div className="relative">
               <div className="relative h-96 rounded-lg overflow-hidden">
-                <Image
+                <img
                   src={room.images[currentImageIndex] || "/placeholder.svg"}
                   alt={`${room.name} - Image ${currentImageIndex + 1}`}
-                  fill
-                  className="object-cover"
+                  className="object-cover w-full h-full"
                 />
                 <Button
                   variant="secondary"
@@ -375,11 +496,10 @@ export default function RoomDetailsPage() {
                       }`}
                     onClick={() => setCurrentImageIndex(index)}
                   >
-                    <Image
+                    <img
                       src={image || "/placeholder.svg"}
                       alt={`Thumbnail ${index + 1}`}
-                      fill
-                      className="object-cover"
+                      className="object-cover w-full h-full"
                     />
                   </button>
                 ))}
@@ -393,7 +513,7 @@ export default function RoomDetailsPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-gray-600 mb-4">{room.longDescription}</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="font-medium">Capacity:</span>
                     <div className="flex items-center mt-1">
@@ -402,16 +522,8 @@ export default function RoomDetailsPage() {
                     </div>
                   </div>
                   <div>
-                    <span className="font-medium">Size:</span>
-                    <div className="mt-1">{room.size}</div>
-                  </div>
-                  <div>
                     <span className="font-medium">Bed Type:</span>
                     <div className="mt-1">{room.bedType}</div>
-                  </div>
-                  <div>
-                    <span className="font-medium">Floor:</span>
-                    <div className="mt-1">{room.floor}</div>
                   </div>
                 </div>
               </CardContent>
@@ -482,20 +594,15 @@ export default function RoomDetailsPage() {
                     <Link key={similarRoom.id} href={`/rooms/${similarRoom.id}`}>
                       <Card className="hover:shadow-md transition-shadow cursor-pointer">
                         <div className="relative h-32">
-                          <Image
+                          <img
                             src={similarRoom.image || "/placeholder.svg"}
                             alt={similarRoom.name}
-                            fill
-                            className="object-cover"
+                            className="object-cover w-full h-full"
                           />
                         </div>
                         <CardContent className="p-4">
                           <h4 className="font-medium mb-2">{similarRoom.name}</h4>
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400 mr-1" />
-                              <span className="text-sm">{similarRoom.rating}</span>
-                            </div>
                             <div className="text-right">
                               <div className="font-bold">₱{similarRoom.price.toLocaleString()}</div>
                               <div className="text-xs text-gray-600">per night</div>
@@ -518,11 +625,6 @@ export default function RoomDetailsPage() {
                   <div>
                     <div className="flex items-center space-x-2">
                       <span className="text-2xl font-bold">₱{room.price.toLocaleString()}</span>
-                      {room.originalPrice && (
-                        <span className="text-lg text-gray-500 line-through">
-                          ₱{room.originalPrice.toLocaleString()}
-                        </span>
-                      )}
                     </div>
                     <div className="text-sm text-gray-600">per night</div>
                   </div>
@@ -553,20 +655,43 @@ export default function RoomDetailsPage() {
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="guests">Guests</Label>
-                  <select
-                    id="guests"
-                    value={guests}
-                    onChange={(e) => setGuests(Number(e.target.value))}
-                    className="w-full p-2 border rounded-md"
-                  >
-                    {[...Array(room.capacity)].map((_, i) => (
-                      <option key={i + 1} value={i + 1}>
-                        {i + 1} guest{i > 0 ? "s" : ""}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="adults">Adults</Label>
+                    <Input
+                      id="adults"
+                      type="number"
+                      min={1}
+                      max={room.capacity}
+                      value={adults}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        if (!isNaN(value) && value >= 1 && value <= room.capacity) {
+                          setAdults(value);
+                          setGuests(value + children);
+                        }
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="children">Children</Label>
+                    <Input
+                      id="children"
+                      type="number"
+                      min={0}
+                      max={Math.max(0, room.capacity - adults)}
+                      value={children}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        if (!isNaN(value) && value >= 0 && value + adults <= room.capacity) {
+                          setChildren(value);
+                          setGuests(adults + value);
+                        }
+                      }}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
 
                 {checkIn && checkOut && nights > 0 && (

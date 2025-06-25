@@ -30,16 +30,16 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
 // Original context creator for Pages Router
 export const createTRPCContext = async (opts: CreateNextContextOptions) => {
   const { req, res } = opts;
-  
+
   // Simple session check from cookies or headers
   let session: Session | null = null;
-  
+
   // Check if there's an authentication cookie or header
   // This is a simplified version - in a real app you'd verify a JWT or session cookie
   const userId = req.cookies['userId'] || req.headers['x-user-id'];
   const userEmail = req.cookies['userEmail'] || req.headers['x-user-email'];
   const userName = req.cookies['userName'] || req.headers['x-user-name'];
-  
+
   if (userId && userEmail) {
     session = {
       user: {
@@ -58,16 +58,16 @@ export const createTRPCContext = async (opts: CreateNextContextOptions) => {
 // New context creator for App Router
 export const createTRPCContextApp = async (opts: { req: NextRequest }) => {
   const { req } = opts;
-  
+
   // Simple session check from cookies or headers
   let session: Session | null = null;
-  
+
   // Check if there's an authentication cookie or header
   // This is a simplified version - in a real app you'd verify a JWT or session cookie
   const userId = req.cookies.get('userId')?.value || req.headers.get('x-user-id');
   const userEmail = req.cookies.get('userEmail')?.value || req.headers.get('x-user-email');
   const userName = req.cookies.get('userName')?.value || req.headers.get('x-user-name');
-  
+
   if (userId && userEmail) {
     session = {
       user: {
@@ -95,7 +95,10 @@ export const publicProcedure = t.procedure;
 
 const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.session || !ctx.session.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'You must be logged in to perform this action'
+    });
   }
   return next({
     ctx: {

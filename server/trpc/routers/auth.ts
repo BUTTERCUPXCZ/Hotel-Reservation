@@ -105,35 +105,36 @@ export const authRouter = router({
                 })
             )
             .mutation(async ({ ctx, input }) => {
-                console.log("Login attempt for:", input.email);
                 try {
-                    // Check if user exists
-                    console.log("Checking if user exists...");
+                    // Check if user exists with a more efficient query
                     const user = await ctx.db.user.findUnique({
                         where: { email: input.email },
+                        select: {
+                            id: true,
+                            email: true,
+                            password: true,
+                            firstname: true,
+                            lastname: true
+                        }
                     });
 
                     if (!user) {
-                        console.log("User not found:", input.email);
                         throw new TRPCError({
                             code: "NOT_FOUND",
                             message: "User not found",
                         });
                     }
 
-                    console.log("User found, verifying password...");
                     // Verify password
                     const isPasswordValid = await bcrypt.compare(input.password, user.password);
                     if (!isPasswordValid) {
-                        console.log("Invalid password for:", input.email);
                         throw new TRPCError({
                             code: "UNAUTHORIZED",
                             message: "Invalid password",
                         });
                     }
 
-                    console.log("Login successful for:", input.email);
-                    // Return success with user data (without password)
+                    // Return only necessary user data (without password)
                     return {
                         status: "success",
                         user: {
@@ -145,13 +146,11 @@ export const authRouter = router({
                         },
                     };
                 } catch (error) {
-                    // Handle errors
+                    // Simplified error handling
                     if (error instanceof TRPCError) {
-                        console.error("TRPC Login error:", error.code, error.message);
                         throw error;
                     }
 
-                    console.error("Login error:", error);
                     throw new TRPCError({
                         code: "INTERNAL_SERVER_ERROR",
                         message: "Failed to log in",

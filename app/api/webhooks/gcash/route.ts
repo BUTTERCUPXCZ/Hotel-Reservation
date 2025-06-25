@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { GCashPaymentService } from "@/lib/gcash"
+import { db } from "@/lib/db"
+import { PrismaClient } from "@prisma/client"
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,22 +43,92 @@ export async function POST(request: NextRequest) {
 }
 
 async function handlePaymentSuccess(paymentData: any) {
-  const bookingReference = paymentData.attributes.metadata.booking_reference
+  try {
+    const bookingReference = paymentData.attributes.metadata.booking_reference
+    const bookingId = paymentData.attributes.metadata.bookingId
 
-  // Update booking status to confirmed
-  // await updateBookingStatus(bookingReference, 'confirmed')
+    console.log(`Payment succeeded for booking: ${bookingReference || bookingId}`)
 
-  // Send confirmation email
-  // await sendBookingConfirmationEmail(bookingReference)
+    // Use bookingId from metadata if available
+    if (bookingId) {
+      // Find the booking
+      const booking = await db.booking.findUnique({
+        where: { id: bookingId },
+        select: {
+          id: true,
+          status: true,
+          roomId: true
+        }
+      });
 
-  console.log(`Payment succeeded for booking: ${bookingReference}`)
+      if (!booking) {
+        console.error(`Booking not found for ID: ${bookingId}`);
+        return;
+      }
+
+      // Only update if the booking isn't already confirmed
+      if (booking.status !== 'CONFIRMED') {
+        // Use a transaction to update both booking status and room count
+        await db.$transaction(async (tx: PrismaClient) => {
+          // 1. Update booking status to CONFIRMED
+          await tx.booking.update({
+            where: { id: bookingId },
+            data: {
+              status: 'CONFIRMED',
+              // You could also store payment information
+              specialRequests: `Payment completed via GCash. Transaction ID: ${paymentData.id}`
+            }
+          });
+
+          // 2. Decrement room count
+          await tx.room.update({
+            where: { id: booking.roomId },
+            data: {
+              numberofrooms: {
+                decrement: 1
+              }
+            }
+          });
+
+          console.log(`Booking ${bookingId} confirmed and room ${booking.roomId} count decremented`);
+        });
+      } else {
+        console.log(`Booking ${bookingId} was already confirmed.`);
+      }
+    } else {
+      console.error("Missing bookingId in payment metadata");
+    }
+
+    // Send confirmation email
+    // await sendBookingConfirmationEmail(bookingReference)
+  } catch (error) {
+    console.error("Error handling payment success:", error);
+  }
 }
 
 async function handlePaymentFailure(paymentData: any) {
-  const bookingReference = paymentData.attributes.metadata.booking_reference
+  try {
+    const bookingReference = paymentData.attributes.metadata.booking_reference
+    const bookingId = paymentData.attributes.metadata.bookingId
 
-  // Update booking status to failed
-  // await updateBookingStatus(bookingReference, 'payment_failed')
+    console.log(`Payment failed for booking: ${bookingReference || bookingId}`)
 
-  console.log(`Payment failed for booking: ${bookingReference}`)
+    // Use bookingId from metadata if available
+    if (bookingId) {
+      // Update booking status to PAYMENT_FAILED (won't affect room count)
+      await db.booking.update({
+        where: { id: bookingId },
+        data: {
+          status: 'PAYMENT_FAILED',
+          specialRequests: `Payment failed via GCash. Transaction ID: ${paymentData.id}`
+        }
+      });
+
+      console.log(`Booking ${bookingId} marked as payment failed`);
+    } else {
+      console.error("Missing bookingId in payment metadata");
+    }
+  } catch (error) {
+    console.error("Error handling payment failure:", error);
+  }
 }

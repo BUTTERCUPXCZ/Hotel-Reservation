@@ -81,10 +81,15 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
         return (
             <div className="container mx-auto px-4 py-4 flex items-center justify-between">
                 {logo}
-                {navLinks}
-                <div className="flex items-center space-x-2">
-                    <div className="w-16 h-8 bg-gray-200 animate-pulse rounded"></div>
-                    <div className="w-16 h-8 bg-gray-200 animate-pulse rounded"></div>
+                {navLinks}                <div className="flex items-center space-x-4">
+                    <Link href="/login">
+                        <Button variant="ghost" size="sm">
+                            Login
+                        </Button>
+                    </Link>
+                    <Link href="/signup">
+                        <Button size="sm">Sign Up</Button>
+                    </Link>
                 </div>
             </div>
         )
@@ -92,8 +97,7 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
     return (
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
             {logo}
-            {navLinks}
-            <div className="flex items-center space-x-4">
+            {navLinks}            <div className="flex items-center space-x-4">
                 {isAuthenticated ? (
                     <>
                         <Link href="/dashboard">
@@ -129,14 +133,6 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
                         <Link href="/signup">
                             <Button size="sm">Sign Up</Button>
                         </Link>
-                        {/* Debug button in development */}
-                        {process.env.NODE_ENV !== 'production' && (
-                            <Link href="/test-auth">
-                                <Button variant="outline" size="sm">
-                                    Test Auth
-                                </Button>
-                            </Link>
-                        )}
                     </>
                 )}
             </div>            {/* Debug info - only shown in development */}

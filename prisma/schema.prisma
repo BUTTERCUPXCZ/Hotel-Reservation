@@ -36,38 +36,23 @@ model RoomType {
 }
 
 model Room {
-  id            String      @id @default(uuid())
+  id            String    @id @default(uuid())
   name          String
   description   String?
   pricePerNight Float
   maxOccupancy  Int
-  isActive      Boolean     @default(true)
+  isActive      Boolean   @default(true)
+  numberofrooms Int       @default(0)
   roomTypeId    String
-  roomType      RoomType    @relation(fields: [roomTypeId], references: [id])
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  roomType      RoomType  @relation(fields: [roomTypeId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   bookings      Booking[]
-  amenities     Amenity[]
-  images        RoomImage[]
-}
+  amenities     String?
 
-model RoomImage {
-  id        String   @id @default(uuid())
-  url       String
-  alt       String?
-  roomId    String
-  room      Room     @relation(fields: [roomId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Amenity {
-  id        String   @id @default(uuid())
-  name      String
-  icon      String?
-  rooms     Room[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // New fields for images
+  imageUrl String? // The actual image URL
+  imageAlt String? // Optional alt text
 }
 
 model Booking {

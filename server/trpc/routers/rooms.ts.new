@@ -34,7 +34,9 @@ export const roomsRouter = router({
                     message: "Failed to fetch rooms",
                 });
             }
-        }),    // Get details of a specific room (public procedure)
+        }),
+
+    // Get details of a specific room (public procedure)
     getRoomById: publicProcedure
         .input(z.object({ id: z.string() }))
         .query(async ({ ctx, input }) => {
@@ -67,6 +69,7 @@ export const roomsRouter = router({
                 });
             }
         }),
+
     // Create a new booking (protected procedure - only for logged-in users)
     createBooking: protectedProcedure
         .input(
@@ -88,6 +91,10 @@ export const roomsRouter = router({
                 });
             }
 
+            // Get user email from session
+            const userEmail = ctx.session.user.email;
+            console.log("Booking attempt for user email:", userEmail);
+            
             // Validate dates
             if (input.checkInDate >= input.checkOutDate) {
                 throw new TRPCError({
@@ -97,16 +104,19 @@ export const roomsRouter = router({
             }
 
             try {
-                // Log session information for debugging
-                console.log("Session info:", {
-                    hasSession: !!ctx.session,
-                    hasUser: !!ctx.session?.user,
-                    email: ctx.session?.user?.email
+                // Step 1: Verify the user exists
+                const user = await ctx.db.user.findUnique({
+                    where: { email: userEmail }
                 });
 
-                console.log("Creating booking with user email:", ctx.session.user.email);
-
-                // Get the room to check availability
+                if (!user) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: "User not found. Please log in again.",
+                    });
+                }
+                
+                // Step 2: Verify the room exists and is available
                 const room = await ctx.db.room.findUnique({
                     where: {
                         id: input.roomId,
@@ -121,7 +131,6 @@ export const roomsRouter = router({
                     });
                 }
 
-                // Check if there are available rooms
                 if (room.numberofrooms <= 0) {
                     throw new TRPCError({
                         code: "BAD_REQUEST",
@@ -129,96 +138,67 @@ export const roomsRouter = router({
                     });
                 }
 
-                // First, check if the user exists
-                const user = await ctx.db.user.findUnique({
-                    where: {
-                        email: ctx.session.user.email
-                    }
+                // Step 3: Create the booking
+                console.log("Creating booking with data:", {
+                    userId: userEmail,
+                    roomId: input.roomId,
+                    checkInDate: input.checkInDate,
+                    checkOutDate: input.checkOutDate
                 });
-
-                if (!user) {
-                    console.error("User not found with email:", ctx.session.user.email);
-                    throw new TRPCError({
-                        code: "NOT_FOUND",
-                        message: "User not found or your session has expired. Please login again."
-                    });
-                }
-
-                console.log("Found user:", user.id, user.email);                // Use a transaction to ensure both operations (creating booking and updating room) succeed or fail together
-                console.log("Creating booking with user data:", {
-                    email: ctx.session.user.email,
-                    id: user.id,
-                    foundUser: user
-                });                // Execute the transaction
-                const booking = await ctx.db.$transaction(async (tx) => {
-                    // 1. Create booking record in the database - using email as userId
-                    const createdBooking = await tx.booking.create({
-                        data: {
-                            userId: ctx.session.user.email, // Using email as userId per schema
-                            roomId: input.roomId,
-                            checkInDate: input.checkInDate,
-                            checkOutDate: input.checkOutDate,
-                            guestCount: input.guestCount,
-                            totalAmount: input.totalAmount,
-                            specialRequests: input.specialRequests || "",
-                            status: "CONFIRMED", // Set initial status to CONFIRMED
-                        },
-                    });
-
-                    console.log("Booking created successfully:", createdBooking.id);
-
-                    // 2. Update room availability by decreasing the room count
-                    await tx.room.update({
-                        where: {
-                            id: input.roomId,
-                        },
-                        data: {
-                            numberofrooms: {
-                                decrement: 1, // Decrease available rooms by 1
-                            },
-                        },
-                    });
-
-                    return createdBooking;
+                
+                const booking = await ctx.db.booking.create({
+                    data: {
+                        userId: userEmail,
+                        roomId: input.roomId,
+                        checkInDate: input.checkInDate,
+                        checkOutDate: input.checkOutDate,
+                        guestCount: input.guestCount,
+                        totalAmount: input.totalAmount,
+                        specialRequests: input.specialRequests || "",
+                        status: "CONFIRMED",
+                    },
                 });
+                
+                console.log("Booking created successfully:", booking.id);
+
+                // Step 4: Update room availability
+                await ctx.db.room.update({
+                    where: { id: input.roomId },
+                    data: {
+                        numberofrooms: {
+                            decrement: 1,
+                        },
+                    },
+                });
+                
+                console.log("Room availability updated");
 
                 return booking;
+                
             } catch (error: any) {
+                console.error("Booking creation error:", error);
+                
                 if (error instanceof TRPCError) {
-                    console.error("TRPC Error in booking creation:", error.message, error.code);
                     throw error;
                 }
-
-                console.error("Failed to create booking:", error);
-
-                // Check for Prisma errors
-                if (error && typeof error === 'object' && 'code' in error) {
-                    if (error.code === 'P2003') {
-                        console.error("Foreign key constraint failed:", error);
-                        throw new TRPCError({
-                            code: "BAD_REQUEST",
-                            message: "Invalid user or room reference"
-                        });
-                    } else if (error.code === 'P2002') {
-                        console.error("Unique constraint failed:", error);
-                        throw new TRPCError({
-                            code: "CONFLICT",
-                            message: "This booking already exists"
-                        });
-                    }
+                
+                // Log detailed Prisma errors
+                if (error.code) {
+                    console.error(`Database error code: ${error.code}`);
                 }
-
-                // Get error message if available
-                const errorMessage = error && typeof error === 'object' && 'message' in error
-                    ? String(error.message)
-                    : "Unknown error";
-
+                
+                if (error.meta) {
+                    console.error("Error metadata:", error.meta);
+                }
+                
                 throw new TRPCError({
                     code: "INTERNAL_SERVER_ERROR",
-                    message: "Failed to create booking: " + errorMessage,
+                    message: `Failed to create booking: ${error.message || "Unknown error"}`
                 });
             }
-        }),    // Get user's bookings (protected procedure)
+        }),
+
+    // Get user's bookings (protected procedure)
     getUserBookings: protectedProcedure
         .query(async ({ ctx }) => {
             try {
@@ -260,56 +240,52 @@ export const roomsRouter = router({
                 // Fallback to mock bookings if database fetch fails
                 return [
                     {
-                        id: "booking1",
+                        id: "mock-booking-1",
                         userId: ctx.session.user.email,
-                        roomId: "room1",
+                        roomId: "room-1",
                         checkInDate: new Date("2025-07-01"),
                         checkOutDate: new Date("2025-07-03"),
-                        guestCount: 1,
+                        guestCount: 2,
                         totalAmount: 2400,
                         status: "CONFIRMED",
-                        createdAt: new Date("2025-06-20"),
-                        updatedAt: new Date("2025-06-20"),
+                        createdAt: new Date("2025-06-15"),
+                        updatedAt: new Date("2025-06-15"),
                         room: {
-                            id: "room1",
-                            name: "Deluxe Single Room",
+                            id: "room-1",
+                            name: "Deluxe Double Room",
                             pricePerNight: 1200,
-                            roomType: {
-                                id: "type1",
-                                name: "Single"
-                            }
                         }
                     },
                     {
-                        id: "booking2",
+                        id: "mock-booking-2",
                         userId: ctx.session.user.email,
-                        roomId: "room2",
-                        checkInDate: new Date("2025-07-15"),
-                        checkOutDate: new Date("2025-07-17"),
-                        guestCount: 2,
-                        totalAmount: 3600,
+                        roomId: "room-2",
+                        checkInDate: new Date("2025-08-10"),
+                        checkOutDate: new Date("2025-08-15"),
+                        guestCount: 1,
+                        totalAmount: 5000,
                         status: "PENDING",
-                        createdAt: new Date("2025-06-22"),
-                        updatedAt: new Date("2025-06-22"),
+                        createdAt: new Date("2025-06-10"),
+                        updatedAt: new Date("2025-06-10"),
                         room: {
-                            id: "room2",
-                            name: "Double Room",
-                            pricePerNight: 1800,
-                            roomType: {
-                                id: "type2",
-                                name: "Double"
-                            }
+                            id: "room-2",
+                            name: "Superior Suite",
+                            pricePerNight: 1000,
                         }
                     }
                 ];
             } catch (error) {
                 console.error("Failed to fetch user bookings:", error);
+                
+                if (error instanceof TRPCError) throw error;
+                
                 throw new TRPCError({
                     code: "INTERNAL_SERVER_ERROR",
                     message: "Failed to fetch your bookings",
                 });
             }
         }),
+
     // Get booking by ID (public procedure)
     getBookingById: publicProcedure
         .input(z.object({ id: z.string() }))

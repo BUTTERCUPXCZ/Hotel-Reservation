@@ -1,82 +1,81 @@
 // hooks/useAuth.ts
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { trpc } from './trpc';
 import { useRouter } from 'next/navigation';
+import { useAuthContext } from '@/components/auth-provider';
 
 export function useAuth() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [user, setUser] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { user, isAuthenticated, isLoading: authLoading } = useAuthContext();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const router = useRouter();
 
   const { mutateAsync: loginMutation } = trpc.auth.login.useMutation();
-  const { mutateAsync: registerMutation } = trpc.auth.register.useMutation();
-  // Check if user is already logged in
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      // Skip API call and use localStorage directly
-      // This avoids the JSON parsing error since we don't have a proper /api/auth/session endpoint yet
-      const userData = localStorage.getItem('user');
-      if (userData) {
-        try {
-          const parsedUser = JSON.parse(userData);
-          setUser(parsedUser);
-          setIsAuthenticated(true);
-        } catch (e) {
-          console.error('Failed to parse user data from localStorage:', e);
-          localStorage.removeItem('user');
-        }
-      }
-
-      setIsLoading(false);
-    };
-
-    checkAuthStatus();
-  }, []);
-  // Login function
+  const { mutateAsync: registerMutation } = trpc.auth.register.useMutation();  // Login function
   const login = async (email: string, password: string) => {
     try {
-      console.log('Login function called with:', { email });
       setIsLoading(true);
 
-      console.log('Calling loginMutation...');
-      const result = await loginMutation({ email, password });
-      console.log('Login mutation result:', result);
+      // Set a timeout for the login request to prevent hanging
+      const loginPromise = loginMutation({ email, password });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Login request timed out')), 5000)
+      );
 
-      if (result.status === 'success') {
-        console.log('Login successful, saving user to localStorage');
-        // Save user in localStorage
-        localStorage.setItem('user', JSON.stringify(result.user));
-        setUser(result.user);
-        setIsAuthenticated(true);
-        console.log('Auth state updated:', { user: result.user, isAuthenticated: true });
+      // Race the login request against the timeout
+      const result = await Promise.race([loginPromise, timeoutPromise]) as any;
+
+      console.log("Login result:", result);
+
+      if (result?.status === 'success' && result?.user) {
+        // Save user in localStorage with timestamp
+        const userData = {
+          ...result.user,
+          loginTime: Date.now() // Add timestamp for potential session expiry
+        };
+
+        // Set the authentication cookies - using Secure and SameSite for better security
+        const cookieOptions = "; path=/; max-age=86400; SameSite=Lax";
+        document.cookie = `userId=${result.user.id}${cookieOptions}`;
+        document.cookie = `userEmail=${result.user.email}${cookieOptions}`;
+        if (result.user.name) {
+          document.cookie = `userName=${result.user.name}${cookieOptions}`;
+        }
+
+        console.log("Setting cookies:",
+          `userId=${result.user.id}`,
+          `userEmail=${result.user.email}`,
+          result.user.name ? `userName=${result.user.name}` : "No username"
+        );
+
+        // Store in localStorage
+        localStorage.setItem('user', JSON.stringify(userData));
+        console.log("User data saved to localStorage");
+
+        // Reload the page to refresh the auth state everywhere
+        window.location.reload();
+
         return { success: true };
       }
 
-      console.log('Login failed, status not success:', result);
       return { success: false, error: 'Login failed' };
     } catch (error: any) {
-      console.error('Login error:', error);
-      // Get more detailed error information
-      const errorMessage = error.message ||
-        (error.data && error.data.message) ||
-        (error.shape && error.shape.message) ||
+      console.error("Login error:", error);
+
+      // Detailed error logging
+      if (error.shape) {
+        console.error("TRPC error shape:", error.shape);
+      }
+
+      // Simplified error handling
+      const errorMessage =
+        error.message ||
+        (error.shape?.message) ||
         'Login failed';
 
-      console.error('Login error details:', {
-        message: errorMessage,
-        code: error.code,
-        data: error.data,
-        shape: error.shape
-      });
-
-      return {
-        success: false,
-        error: errorMessage
-      };
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -117,17 +116,22 @@ export function useAuth() {
       setIsLoading(false);
     }
   };
-
   // Logout function
   const logout = () => {
+    // Remove from localStorage
     localStorage.removeItem('user');
-    setUser(null);
-    setIsAuthenticated(false);
+
+    // Clear cookies
+    document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'userEmail=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    document.cookie = 'userName=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+    // Reload to refresh auth state
     router.push('/login');
-  };
-  return {
+    window.location.reload();
+  }; return {
     user,
-    isLoading,
+    isLoading: isLoading || authLoading,
     isAuthenticated,
     login,
     register,

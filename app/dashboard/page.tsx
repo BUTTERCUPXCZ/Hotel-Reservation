@@ -11,60 +11,45 @@ import { useAuth } from "@/hooks/useAuth"
 import { Calendar, Users, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import { trpc } from "@/hooks/trpc"
 
 function DashboardContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [bookings, setBookings] = useState<any[]>([])
   const { user, logout } = useAuth()
 
+  const userBookingsQuery = trpc.rooms.getUserBookings.useQuery(undefined, {
+    enabled: !!user // Only run the query if the user is logged in
+  })
+
   useEffect(() => {
-    const loadBookings = async () => {
-      setIsLoading(true)
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const mockBookings = [
-        {
-          id: "BK001",
-          roomName: "Shared Dorm (4 beds)",
-          checkIn: "2024-01-15",
-          checkOut: "2024-01-17",
-          guests: 2,
-          total: 1760,
-          status: "confirmed",
-          image: "/placeholder.svg?height=100&width=150",
-        },
-        {
-          id: "BK002",
-          roomName: "Private Room",
-          checkIn: "2024-02-10",
-          checkOut: "2024-02-12",
-          guests: 2,
-          total: 3300,
-          status: "pending",
-          image: "/placeholder.svg?height=100&width=150",
-        },
-        {
-          id: "BK003",
-          roomName: "Family Room",
-          checkIn: "2023-12-20",
-          checkOut: "2023-12-22",
-          guests: 4,
-          total: 4840,
-          status: "completed",
-          image: "/placeholder.svg?height=100&width=150",
-        },
-      ]
-
-      setBookings(mockBookings)
+    if (userBookingsQuery.data) {
+      console.log("Bookings fetched:", userBookingsQuery.data); // Log the data
+      const formattedBookings = userBookingsQuery.data.map(booking => ({
+        id: booking.id,
+        roomName: booking.room?.name || "Unknown Room",
+        checkIn: new Date(booking.checkInDate).toLocaleDateString(),
+        checkOut: new Date(booking.checkOutDate).toLocaleDateString(),
+        guests: booking.guestCount,
+        total: booking.totalAmount,
+        status: booking.status.toLowerCase(), // Convert to lowercase for consistent UI handling
+        image: "/placeholder.svg?height=100&width=150", // Use placeholder image since API doesn't return imageUrl
+      }))
+      setBookings(formattedBookings)
+      setIsLoading(false)
+    } else if (userBookingsQuery.isError) {
+      console.error("Failed to fetch bookings:", userBookingsQuery.error)
       setIsLoading(false)
     }
+  }, [userBookingsQuery.data, userBookingsQuery.isError, userBookingsQuery.error])
 
-    loadBookings()
-  }, [])
+  // Update loading state based on query status
+  useEffect(() => {
+    setIsLoading(userBookingsQuery.isLoading || userBookingsQuery.isFetching)
+  }, [userBookingsQuery.isLoading, userBookingsQuery.isFetching])
 
   const getStatusIcon = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "confirmed":
         return <CheckCircle className="w-4 h-4 text-green-500" />
       case "pending":
@@ -79,7 +64,7 @@ function DashboardContent() {
   }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "confirmed":
         return "bg-green-100 text-green-800"
       case "pending":
@@ -118,22 +103,6 @@ function DashboardContent() {
             <div className="mb-8">
               <div className="w-64 h-8 bg-gray-200 rounded animate-pulse mb-2"></div>
               <div className="w-96 h-4 bg-gray-200 rounded animate-pulse"></div>
-            </div>
-
-            {/* Stats Cards Skeleton */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              {[...Array(4)].map((_, i) => (
-                <Card key={i}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="w-12 h-8 bg-gray-200 rounded animate-pulse mb-1"></div>
-                    <div className="w-20 h-3 bg-gray-200 rounded animate-pulse"></div>
-                  </CardContent>
-                </Card>
-              ))}
             </div>
 
             {/* Content Skeleton */}
@@ -208,50 +177,6 @@ function DashboardContent() {
             <p className="text-muted-foreground">Manage your bookings and account settings</p>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">12</div>
-                <p className="text-xs text-muted-foreground">+2 from last month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Upcoming Stays</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">2</div>
-                <p className="text-xs text-muted-foreground">Next: Jan 15, 2024</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">₱24,500</div>
-                <p className="text-xs text-muted-foreground">This year</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Loyalty Points</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">1,250</div>
-                <p className="text-xs text-muted-foreground">Redeem for discounts</p>
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Main Content */}
           <Tabs defaultValue="bookings" className="space-y-6">
             <TabsList>
@@ -269,79 +194,90 @@ function DashboardContent() {
               </div>
 
               <div className="grid gap-6">
-                {bookings.map((booking) => (
-                  <Card key={booking.id}>
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row gap-4">
-                        <div className="relative w-full md:w-32 h-24 rounded-lg overflow-hidden">
-                          <Image
-                            src={booking.image || "/placeholder.svg"}
-                            alt={booking.roomName}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <h3 className="font-semibold text-lg">{booking.roomName}</h3>
-                              <p className="text-sm text-muted-foreground">Booking ID: {booking.id}</p>
-                            </div>
-                            <Badge className={getStatusColor(booking.status)}>
-                              <div className="flex items-center space-x-1">
-                                {getStatusIcon(booking.status)}
-                                <span className="capitalize">{booking.status}</span>
-                              </div>
-                            </Badge>
+                {bookings.length > 0 ? (
+                  bookings.map((booking) => (
+                    <Card key={booking.id}>
+                      <CardContent className="p-6">
+                        <div className="flex flex-col md:flex-row gap-4">
+                          <div className="relative w-full md:w-32 h-24 rounded-lg overflow-hidden">
+                            <Image
+                              src={booking.image || "/placeholder.svg"}
+                              alt={booking.roomName}
+                              fill
+                              className="object-cover"
+                            />
                           </div>
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <h3 className="font-semibold text-lg">{booking.roomName}</h3>
+                                <p className="text-sm text-muted-foreground">Booking ID: {booking.id}</p>
+                              </div>
+                              <Badge className={getStatusColor(booking.status)}>
+                                <div className="flex items-center space-x-1">
+                                  {getStatusIcon(booking.status)}
+                                  <span className="capitalize">{booking.status}</span>
+                                </div>
+                              </Badge>
+                            </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <div className="flex items-center text-sm">
-                              <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">Check-in</div>
-                                <div className="text-muted-foreground">{booking.checkIn}</div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                              <div className="flex items-center text-sm">
+                                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <div>
+                                  <div className="font-medium">Check-in</div>
+                                  <div className="text-muted-foreground">{booking.checkIn}</div>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center text-sm">
-                              <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">Check-out</div>
-                                <div className="text-muted-foreground">{booking.checkOut}</div>
+                              <div className="flex items-center text-sm">
+                                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <div>
+                                  <div className="font-medium">Check-out</div>
+                                  <div className="text-muted-foreground">{booking.checkOut}</div>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center text-sm">
-                              <Users className="w-4 h-4 mr-2 text-muted-foreground" />
-                              <div>
-                                <div className="font-medium">Guests</div>
-                                <div className="text-muted-foreground">{booking.guests}</div>
+                              <div className="flex items-center text-sm">
+                                <Users className="w-4 h-4 mr-2 text-muted-foreground" />
+                                <div>
+                                  <div className="font-medium">Guests</div>
+                                  <div className="text-muted-foreground">{booking.guests}</div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <div className="text-lg font-bold">₱{booking.total.toLocaleString()}</div>
-                            <div className="flex space-x-2">
-                              <Button variant="outline" size="sm">
-                                View Details
-                              </Button>
-                              {booking.status === "confirmed" && (
+                            </div>                              <div className="flex items-center justify-between">
+                              <div className="text-lg font-bold">₱{booking.total.toLocaleString()}</div>
+                              <div className="flex space-x-2">
                                 <Button variant="outline" size="sm">
-                                  Modify
+                                  View Details
                                 </Button>
-                              )}
-                              {(booking.status === "confirmed" || booking.status === "pending") && (
-                                <Button variant="destructive" size="sm">
-                                  Cancel
-                                </Button>
-                              )}
+                                {booking.status.toLowerCase() === "confirmed" && (
+                                  <Button variant="outline" size="sm">
+                                    Modify
+                                  </Button>
+                                )}
+                                {["confirmed", "pending"].includes(booking.status.toLowerCase()) && (
+                                  <Button variant="destructive" size="sm">
+                                    Cancel
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <div className="text-center py-10">
+                    <div className="mb-4">
+                      <Calendar className="w-12 h-12 mx-auto text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">No bookings found</h3>
+                    <p className="text-muted-foreground mb-4">You haven't made any bookings yet.</p>
+                    <Link href="/rooms">
+                      <Button>Browse Rooms</Button>
+                    </Link>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
