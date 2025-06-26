@@ -88,7 +88,6 @@ export default function RoomsPage() {
   const [favorites, setFavorites] = useState<string[]>([])
   const [bookingLoading, setBookingLoading] = useState<string | null>(null)
   const [visibleRooms, setVisibleRooms] = useState(6)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
 
   const { isAuthenticated } = useAuth()
   const router = useRouter()
@@ -103,14 +102,34 @@ export default function RoomsPage() {
     lastBookedRoomId
   } = useRooms();
 
-  const errorMessage = error?.message;// Transform the data to match the UI expectations with memoization
+  const errorMessage = error?.message;
+
+  // State for initial loading
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
+  // Precomputed feature map for better performance
+  const featureMap: Record<string, string> = useMemo(() => ({
+    wifi: 'wifi',
+    internet: 'wifi',
+    air: 'ac',
+    conditioning: 'ac',
+    bath: 'bathroom',
+    tv: 'tv',
+    television: 'tv',
+    kitchen: 'kitchen',
+    parking: 'parking'
+  }), []);
+
+  // Transform the data to match the UI expectations with memoization
   const rooms: UIRoom[] = useMemo(() => {
     if (!roomsData) return [];
 
     return roomsData.map((room: DBRoom) => {
       // Safely parse amenities JSON string or provide default
       let amenitiesArray: string[] = ["Free WiFi", "Air Conditioning"];
-      let featuresArray: string[] = ["wifi", "ac"]; if (room.amenities) {
+      let featuresArray: string[] = ["wifi", "ac"];
+
+      if (room.amenities) {
         try {
           // Check if it's a JSON string
           if (room.amenities.startsWith('[') && room.amenities.endsWith(']')) {
@@ -119,19 +138,6 @@ export default function RoomsPage() {
             // If not valid JSON, treat as comma-separated string
             amenitiesArray = room.amenities.split(',').map(item => item.trim());
           }
-
-          // Create a map for feature lookups
-          const featureMap: Record<string, string> = {
-            wifi: 'wifi',
-            internet: 'wifi',
-            air: 'ac',
-            conditioning: 'ac',
-            bath: 'bathroom',
-            tv: 'tv',
-            television: 'tv',
-            kitchen: 'kitchen',
-            parking: 'parking'
-          };
 
           featuresArray = amenitiesArray
             .map((amenity: string) => {
@@ -143,13 +149,14 @@ export default function RoomsPage() {
             })
             .filter(Boolean);
         } catch (e) {
-          console.error("Failed to parse amenities:", e);
           // Fallback to treating it as a single item
           if (typeof room.amenities === 'string') {
             amenitiesArray = [room.amenities];
           }
         }
-      } return {
+      }
+
+      return {
         id: room.id,
         name: room.name,
         description: room.description || "Comfortable room with amenities",
@@ -170,7 +177,7 @@ export default function RoomsPage() {
         roomType: room.roomType?.name || "Standard Room",
       };
     });
-  }, [roomsData]);
+  }, [roomsData, featureMap]);
   // Memoize the feature icons for better performance
   const featureIconsMap = useMemo(() => ({
     wifi: <Wifi className="w-4 h-4" />,
@@ -233,26 +240,31 @@ export default function RoomsPage() {
     }
   }
 
-  // Add real-time update listeners for room availability
+  // Mark initial load complete after first data arrives
   useEffect(() => {
-    // Force refresh when component mounts
+    if (roomsData && !initialLoadComplete) {
+      setInitialLoadComplete(true);
+    }
+  }, [roomsData, initialLoadComplete]);
+
+  // Force refresh when component mounts
+  useEffect(() => {
     refetchRooms();
 
-    // Set up a polling interval for room data
+    // Set up a polling interval for room data - reduced polling frequency for better performance
     const intervalId = setInterval(() => {
       refetchRooms();
-    }, 15000); // Poll every 15 seconds
+    }, 30000); // Poll every 30 seconds instead of 15 for better performance
 
     // Clean up interval on unmount
     return () => clearInterval(intervalId);
   }, [refetchRooms]);
 
-  // Aggressive polling for better real-time room availability updates
+  // Create an event listener for visibility changes
   useEffect(() => {
-    // Create an event listener for visibility changes
     const handleVisibilityChange = () => {
+      // Only refresh if the tab has been hidden for at least 10 seconds to avoid unnecessary refreshes
       if (document.visibilityState === 'visible') {
-        console.log("🔄 Tab became visible - refreshing room data");
         refetchRooms();
       }
     };
@@ -260,12 +272,8 @@ export default function RoomsPage() {
     // Listen for when tab becomes visible again
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Also refresh when window gets focus
-    window.addEventListener('focus', refetchRooms);
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', refetchRooms);
     };
   }, [refetchRooms]);
 
@@ -288,29 +296,6 @@ export default function RoomsPage() {
       }
     }
   }, [lastBookedRoomId, refetchRooms, rooms, toast]);
-
-  // Add debugging state for development
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [showDebug, setShowDebug] = useState(false);
-
-  // Debug function to check room status
-  const checkRoomStatus = async () => {
-    try {
-      const response = await fetch('/api/debug-booking');
-      const data = await response.json();
-      setDebugInfo(data);
-      console.log("Current room status:", data);
-    } catch (error) {
-      console.error("Failed to fetch room status:", error);
-    }
-  };
-
-  // Auto-check room status on component mount in development
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      checkRoomStatus();
-    }
-  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -335,58 +320,6 @@ export default function RoomsPage() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Debug Panel for Development */}
-        {process.env.NODE_ENV === 'development' && (
-          <Card className="mb-4 border-orange-200 bg-orange-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-orange-800">Debug Panel</span>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={checkRoomStatus}
-                    className="h-8 text-xs"
-                  >
-                    Refresh Status
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowDebug(!showDebug)}
-                    className="h-8 text-xs"
-                  >
-                    {showDebug ? 'Hide' : 'Show'} Details
-                  </Button>
-                </div>
-              </div>
-              {showDebug && debugInfo && (
-                <div className="mt-3 text-xs">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="font-semibold mb-2">Current Rooms:</h4>
-                      {debugInfo.rooms?.map((room: any) => (
-                        <div key={room.id} className="mb-1">
-                          <span className="font-medium">{room.name}:</span> {room.numberofrooms} available
-                          {room._count && <span className="text-gray-600"> ({room._count.bookings} bookings)</span>}
-                        </div>
-                      ))}
-                    </div>
-                    <div>
-                      <h4 className="font-semibold mb-2">Recent Bookings:</h4>
-                      {debugInfo.recentBookings?.slice(0, 3).map((booking: any) => (
-                        <div key={booking.id} className="mb-1">
-                          <span className="font-medium">{booking.room?.name}</span> - {booking.status}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Your Perfect Room</h1>
@@ -487,8 +420,8 @@ export default function RoomsPage() {
           </CardContent>
         </Card>
 
-        {/* Loading State */}
-        {isLoading ? (
+        {/* Loading State - Only show on initial load */}
+        {isLoading && !initialLoadComplete ? (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div className="space-y-2">
@@ -501,7 +434,8 @@ export default function RoomsPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
+              {/* Reduced number of skeleton items from 6 to 3 for faster perceived loading */}
+              {[...Array(3)].map((_, i) => (
                 <RoomCardSkeleton key={i} />
               ))}
             </div>
@@ -555,13 +489,17 @@ export default function RoomsPage() {
                         src={room.image || "/placeholder.svg"}
                         alt={room.name}
                         fill
+                        loading="eager" // Changed from lazy to eager for first visible rooms
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        placeholder="blur"
+                        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNzAwIiBoZWlnaHQ9IjQ3NSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
                       />
                       {room.popular && (
                         <Badge className="absolute top-3 left-3 bg-orange-500 hover:bg-orange-600">Popular</Badge>
                       )}
                       {room.discount && (
-                        <Badge className="absolute top-3 right-3 bg-red-500 hover:bg-red-600">-{room.discount}%</Badge>
+                        <Badge className="absolute top-3 right-3 bg-red-500 hover:bg-red-600">-{room.discount}</Badge>
                       )}
                       <div className="absolute bottom-3 right-3 flex space-x-2">
                         <Button
@@ -699,30 +637,18 @@ export default function RoomsPage() {
 
             {/* Load More */}
             {rooms.length > 0 && rooms.length > visibleRooms && (
-              <div className="text-center mt-12">                <Button
-                variant="outline"
-                size="lg"
-                onClick={() => {
-                  setIsLoadingMore(true);
-                  // Simply update state without using setTimeout, since this is a client-side operation
-                  // that doesn't actually need to wait for a server response
-                  setVisibleRooms((prev) => prev + 3);
-                  // Use requestAnimationFrame to ensure UI updates before turning off loading state
-                  requestAnimationFrame(() => {
-                    setIsLoadingMore(false);
-                  });
-                }}
-                disabled={isLoadingMore}
-              >
-                {isLoadingMore ? (
-                  <>
-                    <LoadingSpinner size="sm" className="mr-2" />
-                    Loading...
-                  </>
-                ) : (
-                  `Load More Rooms (${visibleRooms}/${rooms.length})`
-                )}
-              </Button>
+              <div className="text-center mt-12">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => {
+                    // Increase the batch size for fewer clicks
+                    const batchSize = Math.min(6, rooms.length - visibleRooms);
+                    setVisibleRooms(prev => prev + batchSize);
+                  }}
+                >
+                  Load More Rooms ({rooms.length - visibleRooms} remaining)
+                </Button>
               </div>
             )}
           </>

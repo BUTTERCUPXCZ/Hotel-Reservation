@@ -1,16 +1,27 @@
 // hooks/useAuth.ts
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { trpc } from './trpc';
 import { useRouter } from 'next/navigation';
 import { useAuthContext } from '@/components/auth-provider';
+import { useQueryClient } from '@tanstack/react-query';
+import { isLoggingOut, cancelAllQueries, clearTRPCCache, setLoggingOutFlag, clearLoggingOutFlag } from '@/lib/trpc-helpers';
 
 export function useAuth() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthContext();
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  // Get access to the React Query client used by TRPC
+  const queryClient = useQueryClient();
 
   const router = useRouter();
+
+  // Check for logout flag on mount and cancel queries if needed
+  useEffect(() => {
+    if (isLoggingOut()) {
+      cancelAllQueries(queryClient);
+    }
+  }, [queryClient]);
 
   const { mutateAsync: loginMutation } = trpc.auth.login.useMutation();
   const { mutateAsync: registerMutation } = trpc.auth.register.useMutation();
@@ -165,19 +176,44 @@ export function useAuth() {
 
   // Logout function
   const logout = () => {
-    // Remove from localStorage
-    localStorage.removeItem('user');
+    try {
+      // Ensure the logging out flag is set
+      setLoggingOutFlag();
 
-    // Clear cookies
-    document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    document.cookie = 'userEmail=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    document.cookie = 'userName=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      // Cancel all active TRPC queries to prevent "unauthorized" errors
+      cancelAllQueries(queryClient);
 
-    // Trigger auth state change event
-    window.dispatchEvent(new CustomEvent('authStateChanged'));
+      // Clear the TRPC cache
+      clearTRPCCache(queryClient);
 
-    // Navigate to login
-    router.push('/login');
+      // Remove user data from localStorage
+      localStorage.removeItem('user');
+
+      // Clear cookies
+      document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'userEmail=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'userName=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+      console.log("Logout completed - auth cookies and localStorage cleared");
+
+      // Trigger auth state change event
+      window.dispatchEvent(new CustomEvent('authStateChanged'));
+
+      // Navigate to login - wrapped in setTimeout to ensure cookie clearing happens first
+      setTimeout(() => {
+        router.push('/login');
+
+        // Remove the logging out flag after navigation
+        setTimeout(() => {
+          clearLoggingOutFlag();
+        }, 200);
+      }, 50);
+    } catch (error) {
+      console.error("Error during logout:", error);
+      // Fallback redirect even if there was an error
+      clearLoggingOutFlag();
+      router.push('/login');
+    }
   };
 
   return {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { trpc } from './trpc';
 import { create } from 'zustand';
+import { isLoggingOut } from '@/lib/trpc-helpers';
 
 // Define a store to manage room-related state globally
 interface RoomStore {
@@ -32,40 +33,57 @@ export function useRooms() {
     // Use tRPC to fetch room data with automatic refetching
     const roomsQuery = trpc.rooms.getAvailableRooms.useQuery(undefined, {
         // Enable refetching on window focus
-        refetchOnWindowFocus: true,
-        // Reduced stale time to 5 seconds for more frequent updates
-        staleTime: 5 * 1000,
-        // Keep data cached for 2 minutes
-        gcTime: 2 * 60 * 1000,
-        // Refetch more frequently for availability updates
-        refetchInterval: 15 * 1000, // Refetch every 15 seconds for faster updates
+        refetchOnWindowFocus: !isLoggingOut(),
+        // Cache data for longer to avoid unnecessary loading states
+        staleTime: 60 * 1000, // Keep data fresh for a minute
+        // Keep data cached for 5 minutes
+        gcTime: 5 * 60 * 1000,
+        // Refetch less frequently for better performance
+        refetchInterval: isLoggingOut() ? false : 30 * 1000, // Reduced from 15s to 30s
         // Enable automatic refetching when network reconnects
-        refetchOnReconnect: true,
-    });
-
-    // Function to trigger a comprehensive refetch of rooms data
+        refetchOnReconnect: !isLoggingOut(),
+        // Don't execute the query if we're in the process of logging out
+        enabled: !isLoggingOut(),
+    });    // Function to trigger a comprehensive refetch of rooms data
     const refetchRooms = useCallback(() => {
+        // Don't refetch if we're logging out
+        if (isLoggingOut()) {
+            console.log("⛔ Skipping room data refetch during logout");
+            return Promise.resolve();
+        }
+
         const now = Date.now();
         console.log("🔄 Refetching rooms data...");
 
         // Prevent excessive refetching (no more than once per second)
         if (now - lastRefetchTime < 1000) {
             console.log("⏱️ Skipping refetch, too soon since last refetch");
-            return;
+            return Promise.resolve();
         }
 
         // Update last refetch time
         setLastRefetchTime(now);
 
-        // Invalidate all room-related queries to ensure fresh data
-        utils.rooms.getAvailableRooms.invalidate();
-        utils.rooms.getRoomById.invalidate();
+        try {
+            // Invalidate all room-related queries to ensure fresh data
+            utils.rooms.getAvailableRooms.invalidate();
+            utils.rooms.getRoomById.invalidate();
 
-        // Also trigger refetch for immediate update
-        roomsQuery.refetch();
+            // Also trigger refetch for immediate update
+            return roomsQuery.refetch();
+        } catch (error) {
+            // Check for logout in progress even if error
+            if (isLoggingOut()) {
+                console.log("⛔ Abandoning room refetch due to logout in progress");
+                return Promise.resolve();
+            }
 
-        // Reset the refetch flag
-        setShouldRefetchRooms(false);
+            console.error("Error refetching rooms:", error);
+            return Promise.reject(error);
+        } finally {
+            // Reset the refetch flag
+            setShouldRefetchRooms(false);
+        }
     }, [utils.rooms, roomsQuery, setShouldRefetchRooms, lastRefetchTime]);
 
     // Use useEffect to handle refetching instead of calling it during render

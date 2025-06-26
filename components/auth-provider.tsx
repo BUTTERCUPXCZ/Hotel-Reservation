@@ -2,6 +2,7 @@
 
 import { useEffect, createContext, useContext, useState } from "react";
 import { useRouter } from "next/navigation";
+import { isLoggingOut } from "@/lib/trpc-helpers";
 
 // Define the auth context type
 interface AuthContextType {
@@ -37,6 +38,14 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     // Get user from localStorage and check cookies
     const checkAuth = () => {
       try {
+        // Don't try to restore auth if we're in the process of logging out
+        if (isLoggingOut()) {
+          console.log("Skipping auth check during logout");
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
         // Check localStorage first
         const userData = localStorage.getItem('user');
         if (userData) {
@@ -129,9 +138,19 @@ export default function AuthProvider({ children }: AuthProviderProps) {
 
     window.addEventListener('authStateChanged', handleAuthChange);
 
+    // Force check auth on router changes to ensure synchronization
+    const handleRouteChange = () => {
+      // This helps ensure auth state is consistent when navigating
+      setTimeout(checkAuth, 50);
+    };
+
+    // Listen for route changes
+    window.addEventListener('popstate', handleRouteChange);
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('authStateChanged', handleAuthChange);
+      window.removeEventListener('popstate', handleRouteChange);
     };
   }, []);
 

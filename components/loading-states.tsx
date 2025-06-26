@@ -4,32 +4,22 @@ import { Skeleton } from "@/components/ui/skeleton"
 export function RoomCardSkeleton() {
   return (
     <Card className="overflow-hidden">
-      <Skeleton className="h-64 w-full" />
-      <CardContent className="p-6">
-        <div className="space-y-3">
+      <Skeleton className="h-48 w-full" /> {/* Reduced height from 64 to 48 */}
+      <CardContent className="p-4"> {/* Reduced padding from 6 to 4 */}
+        <div className="space-y-2"> {/* Reduced spacing from 3 to 2 */}
           <div className="flex items-center justify-between">
-            <Skeleton className="h-6 w-3/4" />
-            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-6 w-2/3" /> {/* Reduced width from 3/4 to 2/3 */}
           </div>
           <Skeleton className="h-4 w-full" />
-          <div className="grid grid-cols-3 gap-4">
-            <Skeleton className="h-4 w-full" />
+          <div className="grid grid-cols-2 gap-2"> {/* Reduced columns from 3 to 2 and gap from 4 to 2 */}
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-full" />
           </div>
-          <div className="flex space-x-3">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="w-8 h-8 rounded-full" />
-            ))}
-          </div>
+          {/* Removed the array of feature skeletons */}
           <Skeleton className="h-4 w-20" />
-          <div className="flex items-center justify-between pt-4">
-            <div>
-              <Skeleton className="h-8 w-24" />
-              <Skeleton className="h-3 w-16 mt-1" />
-            </div>
+          <div className="flex items-center justify-between pt-2"> {/* Reduced padding from 4 to 2 */}
+            <Skeleton className="h-8 w-24" />
             <div className="flex space-x-2">
-              <Skeleton className="h-8 w-16" />
               <Skeleton className="h-8 w-20" />
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -21,23 +21,22 @@ function DashboardContent() {
   const userBookingsQuery = trpc.rooms.getUserBookings.useQuery(undefined, {
     enabled: !!user, // Only run the query if the user is logged in
     retry: (failureCount, error) => {
-      console.log(`getUserBookings query failed (attempt ${failureCount + 1}):`, error);
-
       // Don't retry on 401 errors (authentication issues)
       if (error.data?.code === 'UNAUTHORIZED') {
-        console.log("Authentication error, not retrying");
         return false;
       }
 
-      // Retry up to 3 times for other errors
+      // Retry up to 2 times for other errors
       return failureCount < 2;
     },
-    refetchOnWindowFocus: false
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // Data stays fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep data in cache for 10 minutes
+    refetchOnMount: false // Don't refetch when component remounts if data is still fresh
   })
 
   useEffect(() => {
     if (userBookingsQuery.data) {
-      console.log("Bookings fetched:", userBookingsQuery.data); // Log the data
       const formattedBookings = userBookingsQuery.data.map(booking => ({
         id: booking.id,
         roomName: booking.room?.name || "Unknown Room",
@@ -51,17 +50,10 @@ function DashboardContent() {
       setBookings(formattedBookings)
       setIsLoading(false)
     } else if (userBookingsQuery.isError) {
-      console.error("Failed to fetch bookings:", userBookingsQuery.error)
-
       // Handle specific error types
       if (userBookingsQuery.error.data?.code === 'UNAUTHORIZED') {
-        console.log("User not authenticated, redirecting to login...");
         // The user is not authenticated, we should handle this gracefully
-        // Instead of showing an error, we can show a message to login
-      } else {
-        console.error("Server error fetching bookings:", userBookingsQuery.error.message);
       }
-
       setIsLoading(false)
     }
   }, [userBookingsQuery.data, userBookingsQuery.isError, userBookingsQuery.error])
@@ -71,34 +63,29 @@ function DashboardContent() {
     setIsLoading(userBookingsQuery.isLoading || userBookingsQuery.isFetching)
   }, [userBookingsQuery.isLoading, userBookingsQuery.isFetching])
 
+  // Memoized status helpers for better performance
+  const statusIcons = useMemo(() => ({
+    confirmed: <CheckCircle className="w-4 h-4 text-green-500" />,
+    pending: <Clock className="w-4 h-4 text-yellow-500" />,
+    completed: <CheckCircle className="w-4 h-4 text-blue-500" />,
+    cancelled: <XCircle className="w-4 h-4 text-red-500" />,
+    default: <AlertCircle className="w-4 h-4 text-gray-500" />
+  }), []);
+
+  const statusColors = useMemo(() => ({
+    confirmed: "bg-green-100 text-green-800",
+    pending: "bg-yellow-100 text-yellow-800",
+    completed: "bg-blue-100 text-blue-800",
+    cancelled: "bg-red-100 text-red-800",
+    default: "bg-gray-100 text-gray-800"
+  }), []);
+
   const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "confirmed":
-        return <CheckCircle className="w-4 h-4 text-green-500" />
-      case "pending":
-        return <Clock className="w-4 h-4 text-yellow-500" />
-      case "completed":
-        return <CheckCircle className="w-4 h-4 text-blue-500" />
-      case "cancelled":
-        return <XCircle className="w-4 h-4 text-red-500" />
-      default:
-        return <AlertCircle className="w-4 h-4 text-gray-500" />
-    }
+    return statusIcons[status.toLowerCase() as keyof typeof statusIcons] || statusIcons.default;
   }
 
   const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "confirmed":
-        return "bg-green-100 text-green-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "completed":
-        return "bg-blue-100 text-blue-800"
-      case "cancelled":
-        return "bg-red-100 text-red-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
+    return statusColors[status.toLowerCase() as keyof typeof statusColors] || statusColors.default;
   }
 
   if (isLoading) {
@@ -128,36 +115,25 @@ function DashboardContent() {
               <div className="w-96 h-4 bg-gray-200 rounded animate-pulse"></div>
             </div>
 
-            {/* Content Skeleton */}
+            {/* Content Skeleton - only render 1 skeleton item for faster loading */}
             <div className="space-y-6">
               <div className="w-32 h-6 bg-gray-200 rounded animate-pulse"></div>
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-6">
-                      <div className="flex gap-4">
-                        <div className="w-32 h-24 bg-gray-200 rounded animate-pulse"></div>
-                        <div className="flex-1 space-y-3">
-                          <div className="w-48 h-6 bg-gray-200 rounded animate-pulse"></div>
-                          <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
-                          <div className="grid grid-cols-3 gap-4">
-                            <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
-                            <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
-                            <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <div className="w-24 h-6 bg-gray-200 rounded animate-pulse"></div>
-                            <div className="flex space-x-2">
-                              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
-                              <div className="w-16 h-8 bg-gray-200 rounded animate-pulse"></div>
-                            </div>
-                          </div>
-                        </div>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex gap-4">
+                    <div className="w-32 h-24 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="flex-1 space-y-3">
+                      <div className="w-48 h-6 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
@@ -208,6 +184,7 @@ function DashboardContent() {
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
 
+            {/* Only render active tab content to improve performance */}
             <TabsContent value="bookings" className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">My Bookings</h2>
@@ -227,6 +204,8 @@ function DashboardContent() {
                               src={booking.image || "/placeholder.svg"}
                               alt={booking.roomName}
                               fill
+                              loading="lazy"
+                              sizes="(max-width: 768px) 100vw, 128px"
                               className="object-cover"
                             />
                           </div>
@@ -313,7 +292,7 @@ function DashboardContent() {
                 <CardContent className="space-y-4">
                   <div className="flex items-center space-x-4">
                     <Avatar className="w-20 h-20">
-                      <AvatarImage src={user?.avatar || "/placeholder.svg"} />
+                      <AvatarImage src={user?.avatar || "/placeholder.svg"} loading="lazy" />
                       <AvatarFallback>{user?.name?.charAt(0) || "U"}</AvatarFallback>
                     </Avatar>
                     <Button variant="outline">Change Photo</Button>
@@ -404,10 +383,7 @@ function DashboardContent() {
 export default function DashboardPage() {
   return (
     <AuthGuard>
-      <div className="container mx-auto p-6">
-        <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-        <DashboardContent />
-      </div>
+      <DashboardContent />
     </AuthGuard>
   )
 }

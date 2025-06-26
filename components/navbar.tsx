@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/useAuth"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 
 interface NavbarProps {
     currentPath?: string
@@ -14,6 +15,7 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
     const { user, isAuthenticated, logout } = useAuth()
     const [mounted, setMounted] = useState(false)
     const [debugInfo, setDebugInfo] = useState<any>({})
+    const router = useRouter()
 
     // This ensures the component only renders on the client side to avoid hydration mismatch
     useEffect(() => {
@@ -32,6 +34,29 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
             console.error('Debug error:', e)
         }
     }, [isAuthenticated, user])
+
+    // Logout handler
+    const handleSafeLogout = () => {
+        try {
+            // Set a flag in sessionStorage to indicate we're in the process of logging out
+            // This will be used to prevent TRPC queries from executing
+            sessionStorage.setItem('isLoggingOut', 'true');
+
+            // First navigate away from protected routes to avoid TRPC errors
+            router.push('/');
+
+            // Then logout after a small delay
+            setTimeout(() => {
+                // The logout function in useAuth will handle clearing the flag
+                logout();
+            }, 100);
+        } catch (error) {
+            console.error("Logout error:", error);
+            // Fallback - direct logout
+            logout();
+        }
+    }
+
     // Common navigation links
     const navLinks = (
         <nav className="hidden md:flex items-center space-x-6">
@@ -116,7 +141,7 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={logout}
+                                onClick={handleSafeLogout}
                                 className="text-red-500 hover:text-red-700 hover:bg-red-50"
                             >
                                 Logout
