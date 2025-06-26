@@ -17,7 +17,8 @@ import { useGCashPayment } from "@/hooks/useGCashPayment"
 import AuthGuard from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
 import { trpc } from "@/hooks/trpc"
-import { useRoomStore } from "@/hooks/useRooms"
+import { useRooms, useRoomStore } from "@/hooks/useRooms"
+import { notifyRoomBookingUpdate } from "@/lib/utils"
 
 export default function BookingPage() {
   const [paymentMethod, setPaymentMethod] = useState("")
@@ -26,8 +27,9 @@ export default function BookingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  // Get room store to trigger refetching on the rooms page
-  const { setShouldRefetchRooms, setLastBookedRoomId } = useRoomStore();
+  // Get room functions and state management to trigger refetching on the rooms page
+  const { markRoomAsBooked, refetchRooms } = useRooms();
+  const { setShouldRefetchRooms } = useRoomStore();
 
   // Get parameters from URL
   const roomId = searchParams.get("roomId")
@@ -132,33 +134,55 @@ export default function BookingPage() {
   }
 
   const handleSubmit = async () => {
-    if (!validateForm()) return
+    // Validate form first
+    if (!validateForm()) return;
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      // Check if room exists
+      console.log("🚀 Starting booking process...");
+
+      // Quick validation checks in sequence to fail fast
       if (!roomData || !roomId) {
         throw new Error("Room information is missing");
       }
 
-      // Check if user is authenticated before proceeding
       if (!isAuthenticated) {
-        // If not authenticated, redirect to login page with return URL
+        // Redirect to login page with return URL
         const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
         router.push(`/login?redirect=${returnUrl}`);
         return;
       }
 
-      console.log("User authenticated status:", isAuthenticated);
-      console.log("Current user:", user);
-
-      // Verify user data for booking
       if (!user || !user.email) {
         throw new Error("User information is missing. Please log out and log in again.");
       }
 
-      // Show booking processing UI element
+      // Additional check for room availability
+      if (roomData.numberofrooms <= 0) {
+        throw new Error("Sorry, this room is no longer available. Please select another room.");
+      }
+
+      // Log debug info
+      console.log("📝 Processing booking:", {
+        room: {
+          id: roomId,
+          name: roomData.name,
+          currentAvailability: roomData.numberofrooms,
+        },
+        user: {
+          email: user.email,
+          authenticated: isAuthenticated
+        },
+        booking: {
+          checkIn,
+          checkOut,
+          nights,
+          total
+        }
+      });
+
+      // Reset success state
       setBookingSuccess(false);
 
       // Prepare the booking data - used for all payment methods
@@ -171,7 +195,7 @@ export default function BookingPage() {
         totalAmount: total,
       };
 
-      console.log("Preparing booking with data:", bookingData);
+      console.log("📦 Booking data prepared:", bookingData);
 
       // For card payment or pay at property, create the booking in the database
       if (paymentMethod === "card" || paymentMethod === "cash") {
@@ -189,62 +213,116 @@ export default function BookingPage() {
         console.log("Creating booking for:", user.email, "Room:", roomId);
 
         let bookingId;
-        let bookingCreated = false;
-        let errorDetails = "";
 
-        // Try using the direct API first as it's more reliable for debugging
+        // Function to create booking with the API - faster option
+        const createWithApi = async () => {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+            const response = await fetch('/api/bookings/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(bookingData),
+              signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || "API booking failed");
+            }
+
+            const result = await response.json();
+            console.log("✅ Booking created via API:", result.booking.id);
+            return result.booking;
+          } catch (error) {
+            console.log("API booking error:", error);
+            throw error;
+          }
+        };
+
+        // Function to create booking with tRPC - backup option
+        const createWithTrpc = async () => {
+          try {
+            const booking = await createBookingMutation(bookingData);
+            console.log("✅ Booking created via tRPC:", booking.id);
+            return booking;
+          } catch (error) {
+            console.error("tRPC booking error:", error);
+            throw error;
+          }
+        };
+
         try {
-          console.log("Attempting booking via direct API...");
-          const directResponse = await fetch('/api/bookings/create', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(bookingData),
+          // Try API first, fall back to tRPC if needed
+          let booking;
+          try {
+            booking = await createWithApi();
+          } catch (apiError) {
+            console.log("API booking failed, falling back to tRPC");
+            booking = await createWithTrpc();
+          }
+
+          bookingId = booking.id;
+        } catch (bookingError) {
+          console.error("All booking creation methods failed:", bookingError);
+          throw new Error("Unable to complete your booking. Please try again.");
+        }
+
+        if (!bookingId) {
+          throw new Error("Booking was created but no ID was returned");
+        }
+
+        // If we got here and booking ID exists, show success and redirect
+        if (bookingId) {
+          console.log("✅ Booking completed successfully!", {
+            bookingId,
+            roomId,
+            roomName: roomData?.name,
+            originalAvailability: roomData?.numberofrooms,
           });
 
-          const result = await directResponse.json();
-
-          if (directResponse.ok && result.success) {
-            console.log("✅ Booking created successfully via direct API:", result.booking);
-            bookingId = result.booking.id;
-            bookingCreated = true;
-          } else {
-            console.error("❌ Direct API booking failed:", result);
-            errorDetails = result.error || "Unknown error from direct API";
-
-            // If direct API fails, try the tRPC mutation as fallback
-            console.log("Falling back to tRPC mutation...");
-            const booking = await createBookingMutation(bookingData);
-            console.log("✅ Booking created successfully via tRPC:", booking);
-            bookingId = booking.id;
-            bookingCreated = true;
-          }
-        } catch (apiError) {
-          console.error("API error during booking creation:", apiError);
-
-          // Try tRPC as a last resort if both approaches haven't been tried
-          if (!bookingCreated) {
-            try {
-              console.log("Final attempt via tRPC...");
-              const booking = await createBookingMutation(bookingData);
-              console.log("✅ Booking created successfully on final attempt:", booking);
-              bookingId = booking.id;
-              bookingCreated = true;
-            } catch (finalError) {
-              console.error("All booking attempts failed:", finalError);
-              errorDetails = errorDetails || (finalError instanceof Error ? finalError.message : "Unknown error");
-              throw new Error(`Failed to create booking: ${errorDetails}`);
-            }
-          }
-        }          // If we got here and booking was created, show success and redirect
-        if (bookingCreated && bookingId) {
           // Show temporary success message before redirect
           setBookingSuccess(true);
 
-          // Trigger room list refresh
-          setLastBookedRoomId(roomId);
-          setShouldRefetchRooms(true);
+          // Trigger room availability update first with direct API call for immediate effect
+          try {
+            const updateResponse = await fetch('/api/rooms/availability', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                roomId: roomId,
+                operation: 'decrement'
+              })
+            });
+
+            const updateResult = await updateResponse.json();
+            console.log("Room availability update result:", updateResult);
+          } catch (updateError) {
+            console.error("Error updating room availability:", updateError);
+            // Continue with the process even if this fails
+          }
+
+          // Trigger room list refresh using the proper function
+          if (roomId) {
+            console.log("📢 Triggering room availability update...");
+            markRoomAsBooked(roomId);
+
+            // Trigger comprehensive booking update notifications
+            notifyRoomBookingUpdate(roomId);
+
+            // Force global room data refresh through store and direct refetch
+            setShouldRefetchRooms(true);
+
+            // Only call refetchRooms if it exists (defensive check)
+            if (typeof refetchRooms === 'function') {
+              refetchRooms();
+            }
+
+            console.log("🔔 Room booking notifications sent");
+          }
 
           // Redirect to success page after a brief delay to show success message
           setTimeout(() => {
@@ -297,8 +375,20 @@ export default function BookingPage() {
           console.log("Initiating GCash payment for booking:", pendingBookingId);
 
           // Mark the room for refetch in the rooms page
-          setLastBookedRoomId(roomId);
-          setShouldRefetchRooms(true);
+          if (roomId) {
+            markRoomAsBooked(roomId);
+
+            // Trigger comprehensive booking update notifications
+            notifyRoomBookingUpdate(roomId);
+
+            // Force global room data refresh through store and direct refetch
+            setShouldRefetchRooms(true);
+
+            // Only call refetchRooms if it exists (defensive check)
+            if (typeof refetchRooms === 'function') {
+              refetchRooms();
+            }
+          }
 
           await processPayment({
             amount: total,
@@ -752,7 +842,12 @@ export default function BookingPage() {
                     <div>
                       <h4 className="font-medium mb-2">Included Amenities</h4>
                       <div className="flex flex-wrap gap-1">
-                        {room.amenities.map((amenity) => (
+                        {(typeof room.amenities === 'string'
+                          ? room.amenities.split(',').map(a => a.trim())
+                          : Array.isArray(room.amenities)
+                            ? room.amenities
+                            : []
+                        ).map((amenity) => (
                           <Badge key={amenity} variant="secondary" className="text-xs">
                             {amenity}
                           </Badge>

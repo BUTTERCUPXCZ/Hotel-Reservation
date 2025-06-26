@@ -107,7 +107,7 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
                         </Link>
                         <div className="flex items-center space-x-2">
                             <span className="text-sm font-medium hidden md:inline-block">
-                                Hi, {user?.firstname || user?.name?.split(" ")[0] || "User"}
+                                Hi, {decodeURIComponent(user?.firstname || user?.name?.split(" ")[0] || "User")}
                             </span>
                             <Avatar className="h-8 w-8">
                                 <AvatarImage src={user?.avatar || "/placeholder-user.jpg"} alt={user?.name || "User"} />

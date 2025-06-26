@@ -1,16 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, Download, Mail, AlertCircle } from "lucide-react"
+import { CheckCircle, Download, Mail, AlertCircle, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { trpc } from "@/hooks/trpc"
 import { Separator } from "@/components/ui/separator"
 import { format } from "date-fns"
 import { useAuth } from "@/hooks/useAuth"
 import { useRoomStore } from "@/hooks/useRooms"
+import { useToast } from "@/hooks/use-toast"
 
 interface BookingDetails {
   id: string;
@@ -34,8 +35,10 @@ export default function BookingSuccessPage() {
   const bookingRef = searchParams.get("booking") || searchParams.get("ref")
   const [bookingDetails, setBookingDetails] = useState<BookingDetails | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const { isAuthenticated } = useAuth();
   const { setShouldRefetchRooms } = useRoomStore();
+  const { toast } = useToast();
 
   // Use the new getBookingById endpoint which doesn't require authentication
   const {
@@ -64,23 +67,147 @@ export default function BookingSuccessPage() {
     }
   );
 
+  // Effect to handle user bookings when authenticated
   useEffect(() => {
-    // If the user is authenticated and we have their bookings
-    if (userBookings && bookingRef && !bookingDetails) {
+    if (isAuthenticated && userBookings && bookingRef && !bookingDetails) {
       const booking = userBookings.find((booking) => booking.id === bookingRef);
       if (booking) {
         setBookingDetails(booking as unknown as BookingDetails);
+        setIsLoading(false);
       }
-      setIsLoading(false);
     }
-  }, [bookingRef, userBookings, bookingDetails]);
+  }, [isAuthenticated, userBookings, bookingRef, bookingDetails]);
+
+  // Import once at the top rather than requiring inside a function
+  // We use dynamic import to avoid SSR issues
+  const [notifyUtil, setNotifyUtil] = useState<any>(null);
+
+  // Load the utility once on component mount
+  useEffect(() => {
+    import('@/lib/utils').then(module => {
+      setNotifyUtil(module);
+    });
+  }, []);
+
+  // Memoized notification function to prevent unnecessary re-renders
+  const notifyBookingUpdate = useCallback(() => {
+    if (bookingRef && notifyUtil) {
+      console.log("📢 Sending room booking update notification for:", bookingRef);
+      try {
+        notifyUtil.notifyRoomBookingUpdate(bookingRef);
+      } catch (error) {
+        console.log("Could not send booking notification:", error);
+      }
+    }
+  }, [bookingRef, notifyUtil]);
+
+  // Get tRPC utils for direct query invalidation
+  const utils = trpc.useUtils();
 
   // Effect to ensure room data is refreshed when landing on this page (for GCash callbacks)
   useEffect(() => {
-    // Trigger a refresh of the room data when landing on the success page
-    setShouldRefetchRooms(true);
-  }, [setShouldRefetchRooms]);
+    console.log("🎯 Booking success page loaded - triggering room data refresh");
 
+    // Function to perform a complete refresh of room data
+    const refreshAllRoomData = async () => {
+      try {
+        console.log("🔄 Refreshing all room data...");
+        // Set flag in global store
+        setShouldRefetchRooms(true);
+
+        // Directly invalidate all room-related queries
+        utils.rooms.invalidate();
+
+        // Also make a direct API call to ensure server has the latest data
+        await fetch('/api/rooms/availability', {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+        }).then(r => r.json()).then(data => {
+          console.log("✅ Room availability data refreshed:", data.timestamp);
+        }).catch(err => {
+          console.error("Failed to refresh room data:", err);
+        });
+      } catch (error) {
+        console.error("Error refreshing room data:", error);
+      }
+    };
+
+    // Perform initial refresh immediately
+    refreshAllRoomData();
+
+    // Initial notification after a short delay as backup
+    const initialNotificationTimeout = setTimeout(notifyBookingUpdate, 500);
+
+    // Set up periodic refresh for the first 10 seconds
+    const refreshInterval = setInterval(() => {
+      refreshAllRoomData();
+      notifyBookingUpdate();
+    }, 2000);
+
+    // Stop periodic refresh after 10 seconds
+    const stopRefreshTimeout = setTimeout(() => {
+      clearInterval(refreshInterval);
+      console.log("🛑 Stopped periodic room data refresh");
+    }, 10000);
+
+    return () => {
+      clearTimeout(initialNotificationTimeout);
+      clearInterval(refreshInterval);
+      clearTimeout(stopRefreshTimeout);
+    };
+  }, [setShouldRefetchRooms, notifyBookingUpdate, utils.rooms]);
+
+  // Manual refresh function with user feedback
+  const handleManualRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    console.log("🔄 Manual room refresh triggered by user");
+
+    try {
+      // 1. Set global refresh flag
+      setShouldRefetchRooms(true);
+
+      // 2. Directly invalidate relevant room queries
+      utils.rooms.getAvailableRooms.invalidate();
+      utils.rooms.getRoomById.invalidate();
+
+      // 3. Send booking notification
+      notifyBookingUpdate();
+
+      // 4. Try to fetch fresh room data from API
+      try {
+        const response = await fetch('/api/rooms/availability');
+        if (response.ok) {
+          const data = await response.json();
+          console.log("✓ Fresh room data fetched:", data.rooms.length, "rooms");
+        }
+      } catch (apiError) {
+        console.log("API fetch failed, continuing with tRPC invalidation");
+      }
+
+      // Give some time for the refresh to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Show success notification
+      toast({
+        title: "Room Availability Updated",
+        description: "The latest room availability has been refreshed successfully.",
+        duration: 3000,
+      });
+    } catch (error) {
+      console.log("Could not refresh room data:", error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to refresh room availability. Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [setShouldRefetchRooms, notifyBookingUpdate, toast]);
   // Effect to update booking details when data is loaded from getBookingById
   useEffect(() => {
     if (bookingData) {
@@ -168,6 +295,16 @@ export default function BookingSuccessPage() {
           <div className="space-y-2">
             <Button className="w-full" asChild>
               <Link href="/dashboard">View My Bookings</Link>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Updating...' : 'Update Room Availability'}
             </Button>
 
             <div className="flex space-x-2">

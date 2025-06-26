@@ -52,6 +52,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    setSuccessMessage(null);
     console.log("Login form submitted with:", { email, password: "***" });
 
     if (!email) {
@@ -70,16 +71,35 @@ export default function LoginPage() {
 
       if (result.success) {
         console.log("Login successful, redirecting to:", redirectUrl);
-        // Successfully logged in, will be redirected by the useEffect
-        // that watches for isAuthenticated state
-        router.push(redirectUrl);
+        setSuccessMessage("Login successful! Redirecting...");
+        // Add a small delay to show success message before redirect
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 1000);
       } else {
         console.error("Login failed:", result.error);
-        setErrors({ submit: result.error || "Login failed" });
+        let errorMessage = result.error || "Login failed";
+
+        // Provide more user-friendly error messages
+        if (errorMessage.includes("Database connection") || errorMessage.includes("Tenant or user not found")) {
+          errorMessage = "Our service is temporarily unavailable. Please try again later or contact support if the problem persists.";
+        } else if (errorMessage.includes("timeout")) {
+          errorMessage = "Login request timed out. Please check your internet connection and try again.";
+        } else if (errorMessage.includes("ECONNREFUSED")) {
+          errorMessage = "Service temporarily unavailable. Please try again in a few minutes.";
+        } else if (errorMessage.includes("Invalid email or password")) {
+          errorMessage = "Invalid email or password. Please check your credentials and try again.";
+        } else if (errorMessage.includes("Cannot connect to database server")) {
+          errorMessage = "Database service is currently unavailable. Please try again in a few moments.";
+        } else if (errorMessage.includes("Service temporarily unavailable")) {
+          errorMessage = "Service temporarily unavailable. Please try again in a few moments.";
+        }
+
+        setErrors({ submit: errorMessage });
       }
     } catch (error) {
       console.error("Unexpected error during login:", error);
-      setErrors({ submit: "An unexpected error occurred" });
+      setErrors({ submit: "An unexpected error occurred. Please try again." });
     }
   };
 
@@ -102,6 +122,15 @@ export default function LoginPage() {
               {successMessage}
             </div>
           )}
+
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mb-4 text-center p-3 bg-blue-50 text-blue-700 rounded-md text-xs">
+              <p className="font-medium mb-1">Demo Credentials:</p>
+              <p>Email: demo@example.com</p>
+              <p>Password: demo123</p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>

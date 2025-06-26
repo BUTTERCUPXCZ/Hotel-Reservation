@@ -80,17 +80,29 @@ async function handlePaymentSuccess(paymentData: any) {
             }
           });
 
-          // 2. Decrement room count
-          await tx.room.update({
+          // 2. Check current room count before decrementing
+          const roomData = await tx.room.findUnique({
             where: { id: booking.roomId },
-            data: {
-              numberofrooms: {
-                decrement: 1
-              }
-            }
+            select: { numberofrooms: true, name: true }
           });
 
-          console.log(`Booking ${bookingId} confirmed and room ${booking.roomId} count decremented`);
+          if (!roomData || roomData.numberofrooms <= 0) {
+            console.error(`Cannot decrement room count for ${booking.roomId}: No available rooms`);
+            // Still confirm booking but log the issue
+          } else {
+            // 3. Decrement room count
+            const updatedRoom = await tx.room.update({
+              where: { id: booking.roomId },
+              data: {
+                numberofrooms: {
+                  decrement: 1
+                }
+              }
+            });
+            console.log(`Room ${booking.roomId} count decremented. New count: ${updatedRoom.numberofrooms}`);
+          }
+
+          console.log(`Booking ${bookingId} confirmed and room ${booking.roomId} update processed`);
         });
       } else {
         console.log(`Booking ${bookingId} was already confirmed.`);

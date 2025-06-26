@@ -19,7 +19,20 @@ function DashboardContent() {
   const { user, logout } = useAuth()
 
   const userBookingsQuery = trpc.rooms.getUserBookings.useQuery(undefined, {
-    enabled: !!user // Only run the query if the user is logged in
+    enabled: !!user, // Only run the query if the user is logged in
+    retry: (failureCount, error) => {
+      console.log(`getUserBookings query failed (attempt ${failureCount + 1}):`, error);
+
+      // Don't retry on 401 errors (authentication issues)
+      if (error.data?.code === 'UNAUTHORIZED') {
+        console.log("Authentication error, not retrying");
+        return false;
+      }
+
+      // Retry up to 3 times for other errors
+      return failureCount < 2;
+    },
+    refetchOnWindowFocus: false
   })
 
   useEffect(() => {
@@ -33,12 +46,22 @@ function DashboardContent() {
         guests: booking.guestCount,
         total: booking.totalAmount,
         status: booking.status.toLowerCase(), // Convert to lowercase for consistent UI handling
-        image: "/placeholder.svg?height=100&width=150", // Use placeholder image since API doesn't return imageUrl
+        image: booking.room?.imageUrl || "/placeholder.svg?height=100&width=150", // Use room image if available
       }))
       setBookings(formattedBookings)
       setIsLoading(false)
     } else if (userBookingsQuery.isError) {
       console.error("Failed to fetch bookings:", userBookingsQuery.error)
+
+      // Handle specific error types
+      if (userBookingsQuery.error.data?.code === 'UNAUTHORIZED') {
+        console.log("User not authenticated, redirecting to login...");
+        // The user is not authenticated, we should handle this gracefully
+        // Instead of showing an error, we can show a message to login
+      } else {
+        console.error("Server error fetching bookings:", userBookingsQuery.error.message);
+      }
+
       setIsLoading(false)
     }
   }, [userBookingsQuery.data, userBookingsQuery.isError, userBookingsQuery.error])

@@ -62,7 +62,24 @@ export async function POST(req: NextRequest) {
         console.log(`Check-in: ${new Date(checkInDate).toISOString()}, Check-out: ${new Date(checkOutDate).toISOString()}`); try {
             // Use a transaction to ensure both booking creation and room update succeed or fail together
             const result = await db.$transaction(async (tx) => {
-                // 1. Create booking record
+                // 1. Verify room availability again within the transaction
+                const roomForBooking = await tx.room.findUnique({
+                    where: { id: roomId },
+                    select: { numberofrooms: true, name: true, isActive: true }
+                });
+
+                if (!roomForBooking || !roomForBooking.isActive) {
+                    throw new Error('Room is not available for booking');
+                }
+
+                // Only check room count for CONFIRMED bookings
+                if (status === 'CONFIRMED' && roomForBooking.numberofrooms <= 0) {
+                    throw new Error('No rooms available for immediate confirmation');
+                }
+
+                console.log(`Room check: ${roomForBooking.name} has ${roomForBooking.numberofrooms} rooms available`);
+
+                // 2. Create booking record
                 const booking = await tx.booking.create({
                     data: {
                         userId: userEmail, // Using email which references User.email
@@ -76,9 +93,9 @@ export async function POST(req: NextRequest) {
                     }
                 });
 
-                // 2. Update room availability if status is CONFIRMED
+                // 3. Update room availability only if status is CONFIRMED
                 if (status === 'CONFIRMED') {
-                    await tx.room.update({
+                    const updatedRoom = await tx.room.update({
                         where: { id: roomId },
                         data: {
                             numberofrooms: {
@@ -86,7 +103,9 @@ export async function POST(req: NextRequest) {
                             }
                         }
                     });
-                    console.log(`Room ${roomId} count decremented for booking ${booking.id}`);
+                    console.log(`✅ Room ${roomId} count decremented for confirmed booking ${booking.id}. New count: ${updatedRoom.numberofrooms}`);
+                } else {
+                    console.log(`ℹ️ Room count not decremented for ${status} booking ${booking.id}`);
                 }
 
                 return booking;

@@ -128,7 +128,7 @@ export default function RoomDetailsPage() {
               amenitiesArray = JSON.parse(roomData.amenities);
             } else {
               // If not valid JSON, treat as comma-separated string
-              amenitiesArray = roomData.amenities.split(',').map(item => item.trim());
+              amenitiesArray = roomData.amenities.split(',').map((item: string) => item.trim());
             }
 
             const featureMap: Record<string, string> = {
@@ -536,7 +536,7 @@ export default function RoomDetailsPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {room.amenities.map((amenity: any, index: number) => (
+                  {room.amenities.map((amenity, index: number) => (
                     <div key={index} className="flex items-start space-x-3">
                       <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-full mt-1">
                         <CheckCircle className="w-4 h-4 text-primary" />

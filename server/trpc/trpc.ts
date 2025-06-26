@@ -62,20 +62,33 @@ export const createTRPCContextApp = async (opts: { req: NextRequest }) => {
   // Simple session check from cookies or headers
   let session: Session | null = null;
 
-  // Check if there's an authentication cookie or header
-  // This is a simplified version - in a real app you'd verify a JWT or session cookie
-  const userId = req.cookies.get('userId')?.value || req.headers.get('x-user-id');
-  const userEmail = req.cookies.get('userEmail')?.value || req.headers.get('x-user-email');
-  const userName = req.cookies.get('userName')?.value || req.headers.get('x-user-name');
+  try {
+    // Check if there's an authentication cookie or header
+    // This is a simplified version - in a real app you'd verify a JWT or session cookie
+    const userId = req.cookies.get('userId')?.value || req.headers.get('x-user-id');
+    const userEmail = req.cookies.get('userEmail')?.value || req.headers.get('x-user-email');
+    const userName = req.cookies.get('userName')?.value || req.headers.get('x-user-name');
 
-  if (userId && userEmail) {
-    session = {
-      user: {
-        id: userId.toString(),
-        email: userEmail.toString(),
-        name: userName?.toString(),
-      }
-    };
+    console.log("TRPC Context - Found cookies:", {
+      userId: userId ? "present" : "missing",
+      userEmail: userEmail ? "present" : "missing",
+      userName: userName ? "present" : "missing"
+    });
+
+    if (userId && userEmail) {
+      session = {
+        user: {
+          id: userId.toString(),
+          email: userEmail.toString(),
+          name: userName?.toString(),
+        }
+      };
+      console.log("TRPC Context - Session created for user:", userEmail);
+    } else {
+      console.log("TRPC Context - No valid session found");
+    }
+  } catch (error) {
+    console.error("TRPC Context - Error creating session:", error);
   }
 
   return createInnerTRPCContext({
@@ -94,12 +107,22 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
+  console.log("Protected procedure - checking auth:", {
+    hasSession: !!ctx.session,
+    hasUser: !!ctx.session?.user,
+    userEmail: ctx.session?.user?.email
+  });
+
   if (!ctx.session || !ctx.session.user) {
+    console.log("Protected procedure - UNAUTHORIZED: No session or user");
     throw new TRPCError({
       code: 'UNAUTHORIZED',
       message: 'You must be logged in to perform this action'
     });
   }
+
+  console.log("Protected procedure - AUTH SUCCESS for user:", ctx.session.user.email);
+
   return next({
     ctx: {
       session: { ...ctx.session, user: ctx.session.user },

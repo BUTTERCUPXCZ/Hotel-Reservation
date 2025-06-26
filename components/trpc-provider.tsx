@@ -17,13 +17,35 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
                     transformer: superjson,
                     // Add better error handling
                     fetch(url, options) {
+                        console.log('TRPC request:', url, options?.method || 'GET');
+
+                        // Log request headers for debugging
+                        if (options?.headers) {
+                            console.log('TRPC request headers:', options.headers);
+                        }
+
                         return fetch(url, {
                             ...options,
                             credentials: 'include',
-                        }).then(response => {
+                        }).then(async response => {
+                            console.log('TRPC response status:', response.status);
+
                             if (!response.ok) {
                                 console.error('TRPC request failed:', url, response.status);
+                                const errorText = await response.text();
+                                console.error('TRPC response error:', errorText);
+
+                                // Try to parse as JSON for better error details
+                                try {
+                                    const errorJson = JSON.parse(errorText);
+                                    console.error('TRPC parsed error:', errorJson);
+                                } catch (parseError) {
+                                    console.error('Could not parse error response as JSON');
+                                }
+                            } else {
+                                console.log('TRPC request successful:', url);
                             }
+
                             return response;
                         }).catch(err => {
                             console.error('TRPC network error:', err);

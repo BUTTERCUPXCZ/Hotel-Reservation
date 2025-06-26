@@ -31,7 +31,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  // Check if user is authenticated on mount
+
+  // Check if user is authenticated on mount and listen for storage changes
   useEffect(() => {
     // Get user from localStorage and check cookies
     const checkAuth = () => {
@@ -62,12 +63,15 @@ export default function AuthProvider({ children }: AuthProviderProps) {
             // Check if cookies exist, set them if not
             if (!document.cookie.includes('userId=')) {
               document.cookie = `userId=${parsedUser.id}${cookieOptions}`;
+              console.log("AuthProvider - Set userId cookie");
             }
             if (!document.cookie.includes('userEmail=')) {
               document.cookie = `userEmail=${parsedUser.email}${cookieOptions}`;
+              console.log("AuthProvider - Set userEmail cookie");
             }
             if (parsedUser.name && !document.cookie.includes('userName=')) {
-              document.cookie = `userName=${parsedUser.name}${cookieOptions}`;
+              document.cookie = `userName=${encodeURIComponent(parsedUser.name)}${cookieOptions}`;
+              console.log("AuthProvider - Set userName cookie");
             }
           }
         } else {
@@ -106,6 +110,29 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     };
 
     checkAuth();
+
+    // Listen for storage changes (when user logs in/out in another tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'user') {
+        console.log("Storage change detected for user key");
+        checkAuth();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    // Listen for custom events (for same-tab login updates)
+    const handleAuthChange = () => {
+      console.log("Auth change event detected");
+      checkAuth();
+    };
+
+    window.addEventListener('authStateChanged', handleAuthChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('authStateChanged', handleAuthChange);
+    };
   }, []);
 
   return (

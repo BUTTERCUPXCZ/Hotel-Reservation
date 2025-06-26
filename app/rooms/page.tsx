@@ -164,7 +164,9 @@ export default function RoomsPage() {
         bedType: room.roomType?.name || (room.maxOccupancy > 1 ? "Double/Twin" : "Single"),
         amenities: amenitiesArray,
         features: [...new Set(featuresArray)], // Remove duplicates
-        availability: `${room.numberofrooms} room${room.numberofrooms !== 1 ? 's' : ''} left`,
+        availability: room.numberofrooms > 0
+          ? `${room.numberofrooms} room${room.numberofrooms !== 1 ? 's' : ''} left`
+          : "Fully booked",
         roomType: room.roomType?.name || "Standard Room",
       };
     });
@@ -188,6 +190,18 @@ export default function RoomsPage() {
     setFavorites((prev) => (prev.includes(roomId) ? prev.filter((id) => id !== roomId) : [...prev, roomId]))
   }
   const handleBookNow = async (roomId: string) => {
+    // Check if room is available before proceeding
+    const selectedRoom = rooms.find(room => room.id === roomId);
+    if (selectedRoom?.availability === "Fully booked") {
+      toast({
+        title: "Room Unavailable",
+        description: "This room is currently fully booked. Please try another room.",
+        variant: "destructive",
+        duration: 3000,
+      });
+      return;
+    }
+
     if (!isAuthenticated) {
       router.push(`/login?redirect=/booking?roomId=${roomId}`);
       return;
@@ -207,43 +221,97 @@ export default function RoomsPage() {
       router.push(`/booking?roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=1`);
     } catch (error) {
       console.error("Error navigating to booking page:", error);
+      toast({
+        title: "Navigation Error",
+        description: "Failed to navigate to booking page. Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      });
     } finally {
       // Ensure loading state is cleared even if there's an error
       setBookingLoading(null);
     }
   }
 
-  // Effect to refetch data when returning to this page after booking
+  // Add real-time update listeners for room availability
   useEffect(() => {
-    // Check if the page is becoming visible again (user returns from booking page)
+    // Force refresh when component mounts
+    refetchRooms();
+
+    // Set up a polling interval for room data
+    const intervalId = setInterval(() => {
+      refetchRooms();
+    }, 15000); // Poll every 15 seconds
+
+    // Clean up interval on unmount
+    return () => clearInterval(intervalId);
+  }, [refetchRooms]);
+
+  // Aggressive polling for better real-time room availability updates
+  useEffect(() => {
+    // Create an event listener for visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        console.log("🔄 Tab became visible - refreshing room data");
         refetchRooms();
       }
     };
 
-    // Listen for visibility changes
+    // Listen for when tab becomes visible again
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Clean up event listener
+    // Also refresh when window gets focus
+    window.addEventListener('focus', refetchRooms);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', refetchRooms);
     };
   }, [refetchRooms]);
 
-  // Show toast notification when room count changes
+  // Show toast notification when room count changes and force immediate refetch
   useEffect(() => {
     if (lastBookedRoomId) {
+      // Find the booked room details
       const bookedRoom = rooms.find(room => room.id === lastBookedRoomId);
+
       if (bookedRoom) {
+        // Show a toast notification about the update
         toast({
           title: "Room availability updated",
-          description: `${bookedRoom.name} has been booked. ${bookedRoom.availability}`,
-          duration: 3000,
+          description: `${bookedRoom.name} has been booked. There are now ${bookedRoom.availability === "0" ? "no" : bookedRoom.availability} rooms available.`,
+          variant: "default",
         });
+
+        // Force an immediate refetch to ensure UI is up-to-date
+        refetchRooms();
       }
     }
-  }, [lastBookedRoomId, rooms]);
+  }, [lastBookedRoomId, refetchRooms, rooms, toast]);
+
+  // Add debugging state for development
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showDebug, setShowDebug] = useState(false);
+
+  // Debug function to check room status
+  const checkRoomStatus = async () => {
+    try {
+      const response = await fetch('/api/debug-booking');
+      const data = await response.json();
+      setDebugInfo(data);
+      console.log("Current room status:", data);
+    } catch (error) {
+      console.error("Failed to fetch room status:", error);
+    }
+  };
+
+  // Auto-check room status on component mount in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      checkRoomStatus();
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Toaster />
@@ -267,6 +335,58 @@ export default function RoomsPage() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Debug Panel for Development */}
+        {process.env.NODE_ENV === 'development' && (
+          <Card className="mb-4 border-orange-200 bg-orange-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-orange-800">Debug Panel</span>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={checkRoomStatus}
+                    className="h-8 text-xs"
+                  >
+                    Refresh Status
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowDebug(!showDebug)}
+                    className="h-8 text-xs"
+                  >
+                    {showDebug ? 'Hide' : 'Show'} Details
+                  </Button>
+                </div>
+              </div>
+              {showDebug && debugInfo && (
+                <div className="mt-3 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-semibold mb-2">Current Rooms:</h4>
+                      {debugInfo.rooms?.map((room: any) => (
+                        <div key={room.id} className="mb-1">
+                          <span className="font-medium">{room.name}:</span> {room.numberofrooms} available
+                          {room._count && <span className="text-gray-600"> ({room._count.bookings} bookings)</span>}
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Recent Bookings:</h4>
+                      {debugInfo.recentBookings?.slice(0, 3).map((booking: any) => (
+                        <div key={booking.id} className="mb-1">
+                          <span className="font-medium">{booking.room?.name}</span> - {booking.status}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Your Perfect Room</h1>
@@ -507,9 +627,11 @@ export default function RoomsPage() {
                     <div className="mb-4">
                       <Badge
                         variant="secondary"
-                        className={`text-xs ${room.availability.includes("left")
-                          ? "bg-orange-100 text-orange-800"
-                          : "bg-green-100 text-green-800"
+                        className={`text-xs ${room.availability === "Fully booked"
+                          ? "bg-red-100 text-red-800"
+                          : room.availability.includes("left")
+                            ? "bg-orange-100 text-orange-800"
+                            : "bg-green-100 text-green-800"
                           }`}
                       >
                         {room.availability}
@@ -539,12 +661,19 @@ export default function RoomsPage() {
                         >
                           Details
                         </Button>
-                        <Button size="sm" onClick={() => handleBookNow(room.id)} disabled={bookingLoading === room.id}>
+                        <Button
+                          size="sm"
+                          onClick={() => handleBookNow(room.id)}
+                          disabled={bookingLoading === room.id || room.availability === "Fully booked"}
+                          variant={room.availability === "Fully booked" ? "secondary" : "default"}
+                        >
                           {bookingLoading === room.id ? (
                             <>
                               <LoadingSpinner size="sm" className="mr-2" />
                               Loading...
                             </>
+                          ) : room.availability === "Fully booked" ? (
+                            "Fully Booked"
                           ) : (
                             "Book Now"
                           )}
