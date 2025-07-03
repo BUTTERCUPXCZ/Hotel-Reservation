@@ -182,7 +182,21 @@ export default function BookingSuccessPage() {
 
   // Helper function to calculate stay duration
   const calculateStayDuration = (checkIn: Date, checkOut: Date) => {
-    return differenceInDays(new Date(checkOut), new Date(checkIn));
+    try {
+      const checkInDate = new Date(checkIn);
+      const checkOutDate = new Date(checkOut);
+
+      // Check if dates are valid
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        console.warn("Invalid date encountered in calculateStayDuration", { checkIn, checkOut });
+        return 1; // Default to 1 night if dates are invalid
+      }
+
+      return differenceInDays(checkOutDate, checkInDate);
+    } catch (error) {
+      console.error("Error calculating stay duration:", error);
+      return 1; // Default to 1 night if calculation fails
+    }
   };
 
   // Helper functions to calculate values based on actual booking data
@@ -193,6 +207,7 @@ export default function BookingSuccessPage() {
 
   const getTotalNights = () => {
     if (!bookingDetails) return 0;
+    if (!bookingDetails.checkInDate || !bookingDetails.checkOutDate) return 1; // Default to 1 if dates are missing
     return calculateStayDuration(bookingDetails.checkInDate, bookingDetails.checkOutDate);
   };
 
@@ -567,54 +582,54 @@ export default function BookingSuccessPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg border border-gray-100 overflow-hidden">
-        <CardHeader className="text-center py-6 px-4 bg-gradient-to-r from-blue-600 to-blue-700">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#F5EFE6' }}>
+      <Card className="w-full max-w-md shadow-lg border overflow-hidden" style={{ borderColor: '#E0E0E0' }}>
+        <CardHeader className="text-center py-6 px-4" style={{ backgroundColor: '#6AB19A' }}>
           <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+            <CheckCircle className="w-8 h-8" style={{ color: '#6AB19A' }} />
           </div>
           <CardTitle className="text-2xl text-white">Booking Confirmed!</CardTitle>
-          <p className="text-blue-100 mt-1">Your payment has been processed successfully</p>
+          <p className="mt-1" style={{ color: 'rgba(255, 255, 255, 0.9)' }}>Your payment has been processed successfully</p>
         </CardHeader>
         <CardContent className="text-center space-y-5 px-4 py-6">
-          <p className="text-sm text-gray-600 mb-4">Your booking has been confirmed and payment processed successfully.</p>
+          <p className="text-sm mb-4" style={{ color: '#2E2E2E' }}>Your booking has been confirmed and payment processed successfully.</p>
 
           {bookingRef && (
-            <div className="bg-blue-50 p-3 rounded-lg mb-4 border border-blue-100">
-              <p className="text-xs text-blue-600 mb-1 font-medium uppercase tracking-wide">Booking Reference</p>
-              <p className="font-mono font-bold text-base text-blue-800">{bookingRef}</p>
+            <div className="p-3 rounded-lg mb-4 border" style={{ backgroundColor: '#FAFAFA', borderColor: '#E0E0E0' }}>
+              <p className="text-xs mb-1 font-medium uppercase tracking-wide" style={{ color: '#6AB19A' }}>Booking Reference</p>
+              <p className="font-mono font-bold text-base" style={{ color: '#2E2E2E' }}>{bookingRef}</p>
             </div>
           )}
 
           {isLoading && (
             <div className="flex flex-col items-center justify-center my-10 py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-              <p className="text-gray-600">Loading your booking details...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 mb-4" style={{ borderColor: '#6AB19A' }}></div>
+              <p style={{ color: '#2E2E2E' }}>Loading your booking details...</p>
             </div>
           )}
 
           {!isLoading && bookingDetails && (
             <div ref={receiptRef} className="print:shadow-none max-w-md mx-auto">
               {/* Receipt Component - Redesigned for better visual hierarchy */}
-              <div data-print-receipt className="bg-white border border-gray-200 rounded-lg overflow-hidden print:border-none shadow-md">
+              <div data-print-receipt className="bg-white border rounded-lg overflow-hidden print:border-none shadow-md" style={{ borderColor: '#E0E0E0' }}>
                 {/* Receipt Header - Enhanced with logo placeholder and better visual separation */}
-                <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-center border-b border-gray-200">
+                <div className="p-6 text-center border-b" style={{ backgroundColor: '#6AB19A', borderColor: '#E0E0E0' }}>
                   <div className="mx-auto w-16 h-16 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm">
-                    <Building className="h-8 w-8 text-blue-600" />
+                    <Building className="h-8 w-8" style={{ color: '#6AB19A' }} />
                   </div>
                   <h2 className="text-xl font-bold text-white">Booking Confirmation</h2>
-                  <p className="text-sm text-blue-100 mt-1">TechHub Hostel</p>
-                  <div className="inline-flex items-center px-3 py-1 mt-3 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  <p className="text-sm mt-1 text-white opacity-90">TechHub Hostel</p>
+                  <div className="inline-flex items-center px-3 py-1 mt-3 rounded-full border" style={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', color: '#6AB19A', borderColor: '#6AB19A' }}>
                     <CheckCircle className="w-3.5 h-3.5 mr-1.5" />
                     <span className="text-xs font-medium">Payment Successful</span>
                   </div>
                 </div>
 
                 {/* Booking Reference - Highlighted for importance */}
-                <div className="bg-blue-50 p-4 text-center border-b border-blue-100">
-                  <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">Booking Reference</p>
-                  <p className="font-mono font-bold text-lg text-blue-700">{bookingDetails.id.substring(0, 8)}</p>
-                  <p className="text-xs text-blue-600 mt-1">Issued on {format(new Date(), "MMMM dd, yyyy")}</p>
+                <div className="p-4 text-center border-b" style={{ backgroundColor: '#F5EFE6', borderColor: '#E0E0E0' }}>
+                  <p className="text-xs font-medium uppercase tracking-wide" style={{ color: '#6AB19A' }}>Booking Reference</p>
+                  <p className="font-mono font-bold text-lg" style={{ color: '#2E2E2E' }}>{bookingDetails.id.substring(0, 8)}</p>
+                  <p className="text-xs mt-1" style={{ color: '#6AB19A' }}>Issued on {format(new Date(), "MMMM dd, yyyy")}</p>
                 </div>
 
                 {/* Primary Booking Information - Most important details featured prominently */}
@@ -628,7 +643,11 @@ export default function BookingSuccessPage() {
                         </div>
                         <span className="font-medium text-gray-800">Check-in</span>
                       </div>
-                      <p className="text-lg font-bold text-gray-900">{format(bookingDetails.checkInDate, "MMM dd, yyyy")}</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {bookingDetails.checkInDate && !isNaN(new Date(bookingDetails.checkInDate).getTime())
+                          ? format(new Date(bookingDetails.checkInDate), "MMM dd, yyyy")
+                          : "Processing..."}
+                      </p>
                       <p className="text-xs text-gray-500">After 2:00 PM</p>
                     </div>
 
@@ -640,7 +659,11 @@ export default function BookingSuccessPage() {
                         </div>
                         <span className="font-medium text-gray-800">Check-out</span>
                       </div>
-                      <p className="text-lg font-bold text-gray-900">{format(bookingDetails.checkOutDate, "MMM dd, yyyy")}</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {bookingDetails.checkOutDate && !isNaN(new Date(bookingDetails.checkOutDate).getTime())
+                          ? format(new Date(bookingDetails.checkOutDate), "MMM dd, yyyy")
+                          : "Processing..."}
+                      </p>
                       <p className="text-xs text-gray-500">Before 12:00 PM</p>
                     </div>
                   </div>
@@ -708,7 +731,11 @@ export default function BookingSuccessPage() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500 text-sm">Booking Date</span>
-                      <span className="font-medium text-gray-800">{format(bookingDetails.createdAt, "MMMM dd, yyyy")}</span>
+                      <span className="font-medium text-gray-800">
+                        {bookingDetails.createdAt && !isNaN(new Date(bookingDetails.createdAt).getTime())
+                          ? format(new Date(bookingDetails.createdAt), "MMMM dd, yyyy")
+                          : "Processing..."}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -755,38 +782,38 @@ export default function BookingSuccessPage() {
 
                 {/* Special Requests - Improved design if present */}
                 {bookingDetails.specialRequests && (
-                  <div className="p-5 border-b border-gray-200">
-                    <h3 className="font-semibold text-gray-800 mb-2 flex items-center text-sm">
-                      <AlertCircle className="w-4 h-4 mr-2 text-amber-500" />
+                  <div className="p-5 border-b" style={{ borderColor: '#E0E0E0' }}>
+                    <h3 className="font-semibold mb-2 flex items-center text-sm" style={{ color: '#2E2E2E' }}>
+                      <AlertCircle className="w-4 h-4 mr-2" style={{ color: '#6AB19A' }} />
                       Special Requests
                     </h3>
-                    <div className="bg-amber-50 border border-amber-100 rounded-lg p-3">
-                      <p className="text-sm text-amber-700">{bookingDetails.specialRequests}</p>
+                    <div className="border rounded-lg p-3" style={{ backgroundColor: 'rgba(106, 177, 154, 0.1)', borderColor: 'rgba(106, 177, 154, 0.3)' }}>
+                      <p className="text-sm" style={{ color: '#2E2E2E' }}>{bookingDetails.specialRequests}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Footer Note - Improved with contact info and support QR placeholder */}
-                <div className="p-5 bg-gray-50">
+                <div className="p-5" style={{ backgroundColor: '#F5EFE6' }}>
                   <div className="flex justify-between items-start">
                     <div className="space-y-2">
-                      <h4 className="text-sm font-semibold text-gray-700">TechHub Hostel</h4>
-                      <p className="text-xs text-gray-500">123 Digital Avenue, Innovation District</p>
-                      <p className="text-xs text-gray-500">support@techhubhostel.com</p>
-                      <p className="text-xs text-gray-500">+123 456 7890</p>
+                      <h4 className="text-sm font-semibold" style={{ color: '#2E2E2E' }}>TechHub Hostel</h4>
+                      <p className="text-xs" style={{ color: '#2E2E2E' }}>123 Digital Avenue, Innovation District</p>
+                      <p className="text-xs" style={{ color: '#2E2E2E' }}>support@techhubhostel.com</p>
+                      <p className="text-xs" style={{ color: '#2E2E2E' }}>+123 456 7890</p>
                     </div>
                     <div className="text-right">
-                      <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center mx-auto mb-1">
-                        <span className="text-xs text-gray-500">QR Code</span>
+                      <div className="w-16 h-16 rounded-md flex items-center justify-center mx-auto mb-1" style={{ backgroundColor: 'rgba(106, 177, 154, 0.2)' }}>
+                        <span className="text-xs" style={{ color: '#6AB19A' }}>QR Code</span>
                       </div>
-                      <p className="text-xs text-gray-500">Scan for support</p>
+                      <p className="text-xs" style={{ color: '#2E2E2E' }}>Scan for support</p>
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-200 mt-4 pt-4 text-center text-xs text-gray-500">
+                  <div className="border-t mt-4 pt-4 text-center text-xs" style={{ borderColor: '#E0E0E0', color: '#2E2E2E' }}>
                     <p>Thank you for choosing TechHub Hostel for your stay.</p>
                     <div className="flex items-center justify-center mt-2">
-                      <Clock className="w-3 h-3 mr-1 text-gray-400" />
+                      <Clock className="w-3 h-3 mr-1" style={{ color: '#6AB19A' }} />
                       <p>Receipt generated on {format(new Date(), "MMMM dd, yyyy 'at' h:mm a")}</p>
                     </div>
                   </div>
@@ -796,33 +823,34 @@ export default function BookingSuccessPage() {
           )}
 
           {!isLoading && !bookingDetails && !isAuthenticated && (
-            <div className="bg-amber-50 p-6 rounded-lg text-left my-4 border border-amber-100">
+            <div className="p-6 rounded-lg text-left my-4 border" style={{ backgroundColor: '#FAFAFA', borderColor: '#E0E0E0' }}>
               <div className="flex items-center mb-3">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mr-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: 'rgba(106, 177, 154, 0.2)' }}>
+                  <AlertCircle className="w-5 h-5" style={{ color: '#6AB19A' }} />
                 </div>
-                <p className="font-medium text-amber-800 text-lg">Authentication Required</p>
+                <p className="font-medium text-lg" style={{ color: '#2E2E2E' }}>Authentication Required</p>
               </div>
-              <p className="text-amber-700 mb-5">Please sign in to view your complete booking details and access your receipt.</p>
-              <Button className="w-full bg-amber-600 hover:bg-amber-700 h-11" asChild>
+              <p className="mb-5" style={{ color: '#2E2E2E' }}>Please sign in to view your complete booking details and access your receipt.</p>
+              <Button className="w-full h-11" style={{ backgroundColor: '#6AB19A', color: 'white' }} asChild>
                 <Link href={`/login?redirect=/booking/success?booking=${bookingRef}`}>Sign In to View Details</Link>
               </Button>
             </div>
           )}
 
           {!isLoading && !bookingDetails && isAuthenticated && (
-            <div className="bg-blue-50 p-6 rounded-lg my-4 border border-blue-100">
+            <div className="p-6 rounded-lg my-4 border" style={{ backgroundColor: '#FAFAFA', borderColor: '#E0E0E0' }}>
               <div className="flex items-center mb-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
-                  <RefreshCw className="w-5 h-5 text-blue-600" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: 'rgba(106, 177, 154, 0.2)' }}>
+                  <RefreshCw className="w-5 h-5" style={{ color: '#6AB19A' }} />
                 </div>
-                <p className="font-medium text-blue-800 text-lg">Booking Processing</p>
+                <p className="font-medium text-lg" style={{ color: '#2E2E2E' }}>Booking Processing</p>
               </div>
-              <p className="text-blue-700 mb-4">
+              <p className="mb-4" style={{ color: '#2E2E2E' }}>
                 Your booking was successful, but we're still processing the details. Please try refreshing in a moment.
               </p>
               <Button
-                className="w-full bg-blue-600 hover:bg-blue-700 h-11"
+                className="w-full h-11"
+                style={{ backgroundColor: '#6AB19A', color: 'white' }}
                 onClick={handleManualRefresh}
                 disabled={isRefreshing}
               >
@@ -842,7 +870,7 @@ export default function BookingSuccessPage() {
           )}
 
           <div className="space-y-3 mt-6">
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 h-12" asChild>
+            <Button className="w-full h-12" style={{ backgroundColor: '#6AB19A', color: 'white' }} asChild>
               <Link href="/dashboard">
                 <CheckCircle className="w-4 h-4 mr-2" />
                 View My Bookings
@@ -852,29 +880,40 @@ export default function BookingSuccessPage() {
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
-                className="w-full border-blue-200 hover:bg-blue-50 h-11"
+                className="w-full h-11"
+                style={{ borderColor: '#E0E0E0', color: '#2E2E2E' }}
                 onClick={handleManualRefresh}
                 disabled={isRefreshing}
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} style={{ color: '#6AB19A' }} />
                 <span className="text-sm">{isRefreshing ? 'Updating...' : 'Refresh Data'}</span>
               </Button>
 
-              <Button variant="outline" className="w-full border-blue-200 hover:bg-blue-50 h-11" onClick={handlePrint}>
-                <Printer className="w-4 h-4 mr-2" />
+              <Button
+                variant="outline"
+                className="w-full h-11"
+                style={{ borderColor: '#E0E0E0', color: '#2E2E2E' }}
+                onClick={handlePrint}
+              >
+                <Printer className="w-4 h-4 mr-2" style={{ color: '#6AB19A' }} />
                 <span className="text-sm">Print Receipt</span>
               </Button>
             </div>
 
-            <Button variant="outline" className="w-full border-blue-200 hover:bg-blue-50 h-11">
-              <Mail className="w-4 h-4 mr-2" />
+            <Button
+              variant="outline"
+              className="w-full h-11"
+              style={{ borderColor: '#E0E0E0', color: '#2E2E2E' }}
+            >
+              <Mail className="w-4 h-4 mr-2" style={{ color: '#6AB19A' }} />
               <span className="text-sm">Email Receipt</span>
             </Button>
 
             {process.env.NODE_ENV !== 'production' && (
               <Button
                 variant="outline"
-                className="w-full border-red-100 hover:bg-red-50 text-red-600 h-11"
+                className="w-full h-11"
+                style={{ borderColor: 'rgba(239, 68, 68, 0.2)', color: 'rgb(220, 38, 38)' }}
                 onClick={() => {
                   console.log("📊 Current booking details:", bookingDetails);
                   console.log("🔍 tRPC bookingData:", bookingData);
@@ -892,8 +931,8 @@ export default function BookingSuccessPage() {
             )}
           </div>
 
-          <div className="border-t border-gray-100 pt-4 mt-4">
-            <p className="text-sm text-gray-600">A confirmation email with all details has been sent to your registered email address.</p>
+          <div className="border-t pt-4 mt-4" style={{ borderColor: '#E0E0E0' }}>
+            <p className="text-sm" style={{ color: '#2E2E2E' }}>A confirmation email with all details has been sent to your registered email address.</p>
           </div>
         </CardContent>
       </Card>

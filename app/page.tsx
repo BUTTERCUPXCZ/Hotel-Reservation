@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { MapPin, Users, Wifi, Car, Coffee, Shield, Star, Search, Waves, Palmtree, Sunset, Globe, Calendar as CalendarIcon } from "lucide-react"
+import { MapPin, Users, Wifi, Car, Coffee, Shield, Star, Search, Waves, Palmtree, Sunset, Globe, Calendar as CalendarIcon, Home, Check } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 import { Navbar } from "@/components/navbar"
@@ -242,6 +242,96 @@ export default function HomePage() {
                     </Link>
                   </div>
                 </motion.div>
+              </div>
+            </motion.section>
+
+            {/* Welcome to Kayan Section */}
+            <motion.section
+              className="py-24"
+              style={{ backgroundColor: '#FAFAFA' }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.8 }}
+            >
+              <div className="container mx-auto px-4">
+                <motion.div
+                  className="text-center mb-16"
+                  {...fadeInUp}
+                  transition={{ duration: 0.8, delay: 0.2 }}
+                >
+                  <div className="flex items-center justify-center space-x-3 mb-6">
+                    <Home className="w-5 h-5" style={{ color: '#6AB19A' }} />
+                    <span className="font-medium tracking-wide uppercase text-sm" style={{ color: '#6AB19A' }}>Our Island Home</span>
+                  </div>
+                  <h2 className="text-3xl md:text-4xl font-light mb-6" style={{ color: '#2E2E2E' }}>Welcome to <span style={{ color: '#6AB19A' }}>Kayan</span></h2>
+                  <p className="max-w-3xl mx-auto text-lg leading-relaxed" style={{ color: '#5A5A5A' }}>
+                    Kayan is more than just a place to stay—it's a community, a vibe, and a sensory escape. Hidden in Siargao's lush edges, this is where laid-back island living meets raw, soulful experiences. Whether you're here to unwind or dive deep into the rhythm of the island, you'll find your space at Kayan.
+                  </p>
+                </motion.div>
+
+                <div className="max-w-5xl mx-auto">
+                  <motion.div
+                    className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center"
+                    variants={staggerContainer}
+                    initial="initial"
+                    whileInView="animate"
+                    viewport={{ once: true }}
+                  >
+                    <motion.div variants={fadeInUp} className="order-2 lg:order-1">
+                      <h3 className="text-2xl font-light mb-6" style={{ color: '#2E2E2E' }}>What We <span style={{ color: '#6AB19A' }}>Offer</span></h3>
+                      <p className="mb-6 leading-relaxed" style={{ color: '#5A5A5A' }}>
+                        At Kayan, everything is designed to flow with the island. From the comfort of your room to the energy of our surf shop and the spontaneity of local adventures. We've created a space where you can slow down, connect, and experience Siargao on your own terms.
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                        {[
+                          { label: "Cozy Private & Shared Rooms", description: "Comfort meets charm in our thoughtfully designed accommodations." },
+                          { label: "Outdoor Pool", description: "A calm space to cool off, relax, or hang out with fellow travelers." },
+                          { label: "Surf Shop & Rentals", description: "Boards, gear, and good advice, straight from locals who ride every day." },
+                          { label: "Island Experiences", description: "Tours, surf trips, and spontaneous getaways curated just for our guests." },
+                          { label: "Common Lounge", description: "A space to connect, chill, or groove to live sets and curated playlists." },
+                          { label: "Free Wi-Fi", description: "When you need to reconnect with the outside world." },
+                          { label: "Pet-Friendly", description: "Meet our golden retriever and bring your own furry friend." }
+                        ].map((item, index) => (
+                          <motion.div
+                            key={index}
+                            className="flex items-start space-x-3"
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.5, delay: 0.1 * index }}
+                          >
+                            <div className="mt-1 flex-shrink-0">
+                              <Check className="w-5 h-5" style={{ color: '#6AB19A' }} />
+                            </div>
+                            <div>
+                              <h4 className="font-medium mb-1" style={{ color: '#2E2E2E' }}>{item.label}</h4>
+                              <p className="text-sm" style={{ color: '#5A5A5A' }}>{item.description}</p>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </motion.div>
+
+                    <motion.div variants={scaleIn} className="order-1 lg:order-2">
+                      <div className="relative rounded-2xl overflow-hidden shadow-2xl h-96 group">
+                        <Image
+                          src="/rooftop.jpg"
+                          alt="Kayan Hostel Experience"
+                          fill
+                          className="object-cover transition-transform duration-700 group-hover:scale-110"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                        <div className="absolute bottom-8 left-8 right-8">
+                          <Badge className="mb-2 text-white text-xs border-0" style={{ backgroundColor: '#6AB19A' }}>Kayan Vibes</Badge>
+                          <h3 className="text-xl font-medium mb-1 text-white">Island Living</h3>
+                          <p className="text-white/90 text-sm">Experience the authentic rhythm of Siargao</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                </div>
               </div>
             </motion.section>
 
