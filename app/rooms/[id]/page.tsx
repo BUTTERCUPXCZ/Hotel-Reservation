@@ -439,12 +439,16 @@ export default function RoomDetailsPage() {
               variant="outline"
               size="sm"
               onClick={() => setIsFavorite(!isFavorite)}
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-2 text-[#6AB19A] border-[#6AB19A] hover:bg-[#6AB19A] hover:text-white"
             >
               <Heart className={`w-4 h-4 ${isFavorite ? "fill-red-500 text-red-500" : ""}`} />
               <span>Save</span>
             </Button>
-            <Button variant="outline" size="sm" className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center space-x-2 text-[#6AB19A] border-[#6AB19A] hover:bg-[#6AB19A] hover:text-white"
+            >
               <Share2 className="w-4 h-4" />
               <span>Share</span>
             </Button>
@@ -465,7 +469,7 @@ export default function RoomDetailsPage() {
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white"
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-[#6AB19A] hover:text-white"
                   onClick={prevImage}
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -473,7 +477,7 @@ export default function RoomDetailsPage() {
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white"
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-[#6AB19A] hover:text-white"
                   onClick={nextImage}
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -715,7 +719,7 @@ export default function RoomDetailsPage() {
                 )}
 
                 <Button
-                  className="w-full"
+                  className="w-full bg-[#6AB19A] hover:bg-[#5a9c87] text-white"
                   size="lg"
                   disabled={!checkIn || !checkOut || bookingLoading}
                   onClick={handleReserveNow}

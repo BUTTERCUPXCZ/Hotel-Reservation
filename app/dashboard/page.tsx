@@ -37,26 +37,55 @@ function DashboardContent() {
 
   useEffect(() => {
     if (userBookingsQuery.data) {
-      const formattedBookings = userBookingsQuery.data.map(booking => ({
+      // Filter out any dummy, test, or placeholder data
+      const validBookings = userBookingsQuery.data.filter(booking => {
+        if (!booking || !booking.id) return false;
+
+        const idStr = booking.id.toString().toLowerCase();
+        const roomName = booking.room?.name?.toLowerCase() || '';
+
+        // Check for dummy/test/placeholder indicators in ID or room name
+        const dummyIndicators = [
+          'dummy', 'placeholder', 'sample', 'test', 'demo',
+          'fake', 'mock', 'example', 'temp', 'default', 'booking'
+        ];
+
+        // Also check for simple patterns like booking1, booking2, etc.
+        const simpleBookingPattern = /^booking\d*$/i;
+
+        const isDummyData = dummyIndicators.some(indicator =>
+          idStr.includes(indicator) || roomName.includes(indicator)
+        ) || simpleBookingPattern.test(idStr);
+
+        return !isDummyData;
+      });
+
+      const formattedBookings = validBookings.map(booking => ({
         id: booking.id,
         roomName: booking.room?.name || "Unknown Room",
         checkIn: new Date(booking.checkInDate).toLocaleDateString(),
         checkOut: new Date(booking.checkOutDate).toLocaleDateString(),
         guests: booking.guestCount,
         total: booking.totalAmount,
-        status: booking.status.toLowerCase(), // Convert to lowercase for consistent UI handling
-        image: booking.room?.imageUrl || "/placeholder.svg?height=100&width=150", // Use room image if available
+        status: booking.status.toLowerCase(),
+        image: booking.room?.imageUrl || "/placeholder.svg?height=100&width=150",
       }))
+
       setBookings(formattedBookings)
       setIsLoading(false)
     } else if (userBookingsQuery.isError) {
-      // Handle specific error types
       if (userBookingsQuery.error.data?.code === 'UNAUTHORIZED') {
-        // The user is not authenticated, we should handle this gracefully
+        // Handle unauthorized error
       }
+      // Clear any existing bookings on error
+      setBookings([])
+      setIsLoading(false)
+    } else if (userBookingsQuery.data === undefined && !userBookingsQuery.isLoading) {
+      // Explicitly handle undefined data when not loading
+      setBookings([])
       setIsLoading(false)
     }
-  }, [userBookingsQuery.data, userBookingsQuery.isError, userBookingsQuery.error])
+  }, [userBookingsQuery.data, userBookingsQuery.isError, userBookingsQuery.error, userBookingsQuery.isLoading])
 
   // Update loading state based on query status
   useEffect(() => {
@@ -153,10 +182,7 @@ function DashboardContent() {
             <span className="text-xl font-bold">HostelHub</span>
           </Link>
           <div className="flex items-center space-x-4">
-            <Link href="/rooms">
-              <Button variant="ghost">Browse Rooms</Button>
-            </Link>
-            <span className="font-medium">Hi, {user?.name || "Guest"}</span>
+            <span className="font-medium">Hi, {user?.name && decodeURIComponent(user.name) || user?.firstname || "Guest"}</span>
             <Button
               variant="outline"
               onClick={logout}
@@ -172,7 +198,7 @@ function DashboardContent() {
         <div className="max-w-6xl mx-auto">
           {/* Welcome Section */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.name || "Guest"}!</h1>
+            <h1 className="text-3xl font-bold mb-2">Welcome back, {(user?.name && decodeURIComponent(user.name)) || user?.firstname || "Guest"}!</h1>
             <p className="text-muted-foreground">Manage your bookings and account settings</p>
           </div>
 
@@ -269,14 +295,18 @@ function DashboardContent() {
                     </Card>
                   ))
                 ) : (
-                  <div className="text-center py-10">
-                    <div className="mb-4">
-                      <Calendar className="w-12 h-12 mx-auto text-gray-400" />
+                  <div className="text-center py-12">
+                    <div className="mb-6">
+                      <Calendar className="w-16 h-16 mx-auto text-gray-300" />
                     </div>
-                    <h3 className="text-lg font-medium mb-2">No bookings found</h3>
-                    <p className="text-muted-foreground mb-4">You haven't made any bookings yet.</p>
+                    <h3 className="text-xl font-semibold mb-3">No bookings yet</h3>
+                    <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                      You haven't made any reservations yet. Start exploring our available rooms and make your first booking!
+                    </p>
                     <Link href="/rooms">
-                      <Button>Browse Rooms</Button>
+                      <Button size="lg" className="px-8">
+                        Explore Rooms
+                      </Button>
                     </Link>
                   </div>
                 )}
@@ -293,18 +323,30 @@ function DashboardContent() {
                   <div className="flex items-center space-x-4">
                     <Avatar className="w-20 h-20">
                       <AvatarImage src={user?.avatar || "/placeholder.svg"} loading="lazy" />
-                      <AvatarFallback>{user?.name?.charAt(0) || "U"}</AvatarFallback>
+                      <AvatarFallback>{(user?.name && decodeURIComponent(user.name).charAt(0)) || user?.firstname?.charAt(0) || "U"}</AvatarFallback>
                     </Avatar>
                     <Button variant="outline">Change Photo</Button>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">First Name</label>
-                      <input className="w-full p-2 border rounded-md" defaultValue={user?.name?.split(" ")[0] || ""} />
+                      <input className="w-full p-2 border rounded-md"
+                        defaultValue={
+                          user?.firstname ||
+                          (user?.name && decodeURIComponent(user.name).split(" ")[0]) ||
+                          ""
+                        }
+                      />
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Last Name</label>
-                      <input className="w-full p-2 border rounded-md" defaultValue={user?.name?.split(" ")[1] || ""} />
+                      <input className="w-full p-2 border rounded-md"
+                        defaultValue={
+                          user?.lastname ||
+                          (user?.name && decodeURIComponent(user.name).split(" ")[1]) ||
+                          ""
+                        }
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback, lazy, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -13,34 +13,84 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar, Users, CreditCard, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
-import { useGCashPayment } from "@/hooks/useGCashPayment"
 import AuthGuard from "@/components/auth-guard"
 import { Navbar } from "@/components/navbar"
 import { trpc } from "@/hooks/trpc"
 import { useRooms, useRoomStore } from "@/hooks/useRooms"
 import { notifyRoomBookingUpdate } from "@/lib/utils"
 
+// Lazy load heavy components
+const Dialog = lazy(() => import("@/components/ui/dialog").then(module => ({
+  default: module.Dialog
+})))
+const DialogContent = lazy(() => import("@/components/ui/dialog").then(module => ({
+  default: module.DialogContent
+})))
+const DialogHeader = lazy(() => import("@/components/ui/dialog").then(module => ({
+  default: module.DialogHeader
+})))
+const DialogTitle = lazy(() => import("@/components/ui/dialog").then(module => ({
+  default: module.DialogTitle
+})))
+const DialogFooter = lazy(() => import("@/components/ui/dialog").then(module => ({
+  default: module.DialogFooter
+})))
+
+interface Room {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  capacity: number;
+  floor: string;
+  amenities: string[];
+  numberofrooms?: number;
+  roomType?: {
+    name: string;
+  };
+  imageUrl?: string;
+  maxOccupancy?: number;
+  pricePerNight?: number;
+}
+
+interface FormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  specialRequests: string;
+  gcashNumber: string;
+  cardNumber: string;
+  expiry: string;
+  cvv: string;
+  cardName: string;
+  terms: boolean;
+  cancellation: boolean;
+}
+
+// Memoized loading spinner component
+const LoadingSpinner = () => (
+  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+)
+
+// Memoized fallback component for lazy loading
+const ComponentFallback = ({ className = "" }: { className?: string }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${className}`} />
+)
+
 export default function BookingPage() {
+  // All useState hooks must be at the top level and in consistent order
   const [paymentMethod, setPaymentMethod] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const { isAuthenticated, user } = useAuth()
-  const router = useRouter()
-  const searchParams = useSearchParams()
+  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [bookingSuccess, setBookingSuccess] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [lastBookingId, setLastBookingId] = useState<string | null>(null)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Get room functions and state management to trigger refetching on the rooms page
-  const { markRoomAsBooked, refetchRooms } = useRooms();
-  const { setShouldRefetchRooms } = useRoomStore();
-
-  // Get parameters from URL
-  const roomId = searchParams.get("roomId")
-  const checkInParam = searchParams.get("checkIn")
-  const checkOutParam = searchParams.get("checkOut")
-  const guestsParam = searchParams.get("guests") || "1"
-
-  // TRPC mutation for creating a booking
-  const { mutateAsync: createBookingMutation } = trpc.rooms.createBooking.useMutation()
-
-  const [formData, setFormData] = useState({
+  // Initialize form data
+  const [formData, setFormData] = useState<FormData>({
     firstName: "",
     lastName: "",
     email: "",
@@ -54,59 +104,104 @@ export default function BookingPage() {
     terms: false,
     cancellation: false,
   })
-  const [errors, setErrors] = useState<Record<string, string>>({})
-  const [bookingSuccess, setBookingSuccess] = useState(false)
 
-  const { processPayment, isLoading: paymentLoading, error: paymentError } = useGCashPayment()
+  // All useContext hooks (from custom hooks) must be called consistently
+  const { isAuthenticated, user } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-  // Fetch room data using tRPC
-  const {
-    data: roomData,
-    isLoading: isRoomLoading,
-    error: roomError
-  } = trpc.rooms.getRoomById.useQuery(
-    { id: roomId || "" },
+  // Get room functions and state management - these must be called consistently
+  const { markRoomAsBooked, refetchRooms } = useRooms();
+  const { setShouldRefetchRooms } = useRoomStore();
+
+  // Memoize search params parsing - must be called before any conditional logic
+  const searchParamsData = useMemo(() => {
+    const roomId = searchParams?.get("roomId") || ""
+    const checkInParam = searchParams?.get("checkIn") || ""
+    const checkOutParam = searchParams?.get("checkOut") || ""
+    const guestsParam = searchParams?.get("guests") || "1"
+    return { roomId, checkInParam, checkOutParam, guestsParam }
+  }, [searchParams])
+
+  const { roomId, checkInParam, checkOutParam, guestsParam } = searchParamsData
+
+  // TRPC hooks must always be called in the same order
+  const createBookingMutation = trpc.rooms.createBooking.useMutation()
+
+  // Room query - always call this hook, use enabled to control execution
+  const roomQuery = trpc.rooms.getRoomById.useQuery(
+    { id: roomId },
     {
       enabled: !!roomId,
       retry: 1,
-      refetchOnWindowFocus: false
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+      gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+      select: useCallback((data: any) => ({
+        id: data.id,
+        name: data.name || "Room",
+        description: data.description || "No description available",
+        pricePerNight: data.pricePerNight || 0,
+        imageUrl: data.imageUrl,
+        maxOccupancy: data.maxOccupancy || 1,
+        numberofrooms: data.numberofrooms,
+        amenities: data.amenities,
+        roomType: data.roomType
+      }), [])
     }
-  );
+  )
 
   // Parse the dates and calculate nights
-  const checkIn = checkInParam || new Date().toISOString().split('T')[0];
-  const checkOut = checkOutParam || new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0];
-  const checkInDate = new Date(checkIn);
-  const checkOutDate = new Date(checkOut);
-  const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
-  const guests = parseInt(guestsParam, 10);
+  const dateCalculations = useMemo(() => {
+    const checkIn = checkInParam || new Date().toISOString().split('T')[0]
+    const checkOut = checkOutParam || new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]
+    const checkInDate = new Date(checkIn)
+    const checkOutDate = new Date(checkOut)
+    const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24))
+    const guests = parseInt(guestsParam, 10)
 
-  // Transform room data for UI
-  const room = roomData ? {
-    id: roomData.id,
-    name: roomData.name || "Room",
-    description: roomData.description || "No description available",
-    price: roomData.pricePerNight,
-    image: roomData.imageUrl || "/placeholder.svg?height=200&width=400",
-    capacity: roomData.maxOccupancy,
-    floor: roomData.roomType?.name || "Standard",
-    amenities: roomData.amenities ? roomData.amenities.split(',') : ["Free WiFi", "Air Conditioning"],
-  } : {
-    id: "dorm-4",
-    name: "Shared Dorm (4 beds)",
-    description: "Perfect for budget travelers",
-    price: 800,
-    image: "/placeholder.svg?height=200&width=400",
-    capacity: 4,
-    floor: "2nd Floor",
-    amenities: ["Free WiFi", "Air Conditioning", "Shared Bathroom"],
-  }
+    return { checkIn, checkOut, checkInDate, checkOutDate, nights, guests }
+  }, [checkInParam, checkOutParam, guestsParam])
 
-  const subtotal = room.price * nights
-  const serviceFee = Math.round(subtotal * 0.1)
-  const total = subtotal + serviceFee
+  // Memoize room transformation
+  const room = useMemo(() => {
+    if (!roomQuery.data) {
+      return {
+        id: "dorm-4",
+        name: "Shared Dorm (4 beds)",
+        description: "Perfect for budget travelers",
+        price: 800,
+        image: "/placeholder.svg?height=200&width=400",
+        capacity: 4,
+        floor: "2nd Floor",
+        amenities: ["Free WiFi", "Air Conditioning", "Shared Bathroom"],
+      }
+    }
 
-  const validateForm = () => {
+    const data = roomQuery.data
+    return {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      price: data.pricePerNight,
+      image: data.imageUrl || "/placeholder.svg?height=200&width=400",
+      capacity: data.maxOccupancy,
+      floor: data.roomType?.name || "Standard",
+      amenities: data.amenities ? data.amenities.split(',') : ["Free WiFi", "Air Conditioning"],
+      numberofrooms: data.numberofrooms
+    }
+  }, [roomQuery.data])
+
+  // Memoize price calculations
+  const priceCalculations = useMemo(() => {
+    const subtotal = room.price * dateCalculations.nights
+    const serviceFee = Math.round(subtotal * 0.1)
+    const total = subtotal + serviceFee
+    return { subtotal, serviceFee, total }
+  }, [room.price, dateCalculations.nights])
+
+  // Memoized validation function
+  const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {}
 
     if (!formData.firstName.trim()) newErrors.firstName = "First name is required"
@@ -131,24 +226,59 @@ export default function BookingPage() {
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
-  }
+  }, [formData, paymentMethod])
 
-  const handleSubmit = async () => {
-    // Validate form first
-    if (!validateForm()) return;
+  // Optimized form input handler
+  const handleInputChange = useCallback((field: keyof FormData, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }))
+    }
+  }, [errors])
 
-    setIsLoading(true);
+  // Mock processPayment function for GCash (replace with your actual implementation)
+  const processPayment = useCallback(async (paymentData: {
+    amount: number;
+    description: string;
+    bookingId: string;
+    successUrl: string;
+    failureUrl: string;
+  }) => {
+    setPaymentLoading(true)
+    try {
+      // Replace this with your actual GCash payment implementation
+      console.log("Processing GCash payment:", paymentData)
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      // Redirect to success URL on successful payment
+      window.location.href = paymentData.successUrl
+    } catch (error) {
+      console.error("Payment processing failed:", error)
+      throw error
+    } finally {
+      setPaymentLoading(false)
+    }
+  }, [])
+
+  // Optimized submit handler
+  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!validateForm()) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    setErrors({})
 
     try {
       console.log("🚀 Starting booking process...");
 
-      // Quick validation checks in sequence to fail fast
-      if (!roomData || !roomId) {
+      if (!roomQuery.data || !roomId) {
         throw new Error("Room information is missing");
       }
 
       if (!isAuthenticated) {
-        // Redirect to login page with return URL
         const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
         router.push(`/login?redirect=${returnUrl}`);
         return;
@@ -158,97 +288,50 @@ export default function BookingPage() {
         throw new Error("User information is missing. Please log out and log in again.");
       }
 
-      // Additional check for room availability
-      if (roomData.numberofrooms <= 0) {
+      if (roomQuery.data.numberofrooms && roomQuery.data.numberofrooms <= 0) {
         throw new Error("Sorry, this room is no longer available. Please select another room.");
       }
-
-      // Log debug info
-      console.log("📝 Processing booking:", {
-        room: {
-          id: roomId,
-          name: roomData.name,
-          currentAvailability: roomData.numberofrooms,
-        },
-        user: {
-          email: user.email,
-          authenticated: isAuthenticated
-        },
-        booking: {
-          checkIn,
-          checkOut,
-          nights,
-          total
-        }
-      });
 
       // Reset success state
       setBookingSuccess(false);
 
-      // Prepare the booking data - used for all payment methods
+      // Prepare the booking data
       const bookingData = {
         roomId: roomId,
-        checkInDate: new Date(checkIn),
-        checkOutDate: new Date(checkOut),
-        guestCount: guests,
+        checkInDate: new Date(dateCalculations.checkIn),
+        checkOutDate: new Date(dateCalculations.checkOut),
+        guestCount: dateCalculations.guests,
         specialRequests: formData.specialRequests || "",
-        totalAmount: total,
+        totalAmount: priceCalculations.total,
       };
 
-      console.log("📦 Booking data prepared:", bookingData);
-
-      // For card payment or pay at property, create the booking in the database
+      // For card payment or pay at property
       if (paymentMethod === "card" || paymentMethod === "cash") {
-        // First, check authentication status via the debug API to ensure cookies are set properly
-        const authResponse = await fetch(`/api/auth-debug`);
-        const authResult = await authResponse.json();
-        console.log("Auth debug result:", authResult);
+        let bookingId: string | undefined;
 
-        if (!authResult.auth?.isAuthenticated) {
-          console.error("Auth debug shows user is not authenticated");
-          throw new Error("Authentication issue detected. Please log out and log in again.");
-        }
-
-        // Log the booking creation attempt
-        console.log("Creating booking for:", user.email, "Room:", roomId);
-
-        let bookingId;
-
-        // Function to create booking with the API - faster option
         const createWithApi = async () => {
           try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
             const response = await fetch('/api/bookings/create', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(bookingData),
-              signal: controller.signal
             });
-
-            clearTimeout(timeoutId);
 
             if (!response.ok) {
               const errorData = await response.json();
               throw new Error(errorData.error || "API booking failed");
             }
 
-            const result = await response.json();
-            console.log("✅ Booking created via API:", result.booking.id);
-            return result.booking;
+            return await response.json();
           } catch (error) {
             console.log("API booking error:", error);
             throw error;
           }
         };
 
-        // Function to create booking with tRPC - backup option
         const createWithTrpc = async () => {
           try {
-            const booking = await createBookingMutation(bookingData);
-            console.log("✅ Booking created via tRPC:", booking.id);
-            return booking;
+            return await createBookingMutation.mutateAsync(bookingData);
           } catch (error) {
             console.error("tRPC booking error:", error);
             throw error;
@@ -256,40 +339,52 @@ export default function BookingPage() {
         };
 
         try {
-          // Try API first, fall back to tRPC if needed
           let booking;
+
           try {
+            // Try API first
             booking = await createWithApi();
+            console.log("Booking created with API:", booking);
           } catch (apiError) {
             console.log("API booking failed, falling back to tRPC");
-            booking = await createWithTrpc();
+
+            // If API fails, try tRPC
+            try {
+              booking = await createWithTrpc();
+              console.log("Booking created with tRPC:", booking);
+            } catch (trpcError) {
+              console.error("tRPC booking also failed:", trpcError);
+              throw new Error("All booking methods failed. Please try again later.");
+            }
           }
 
-          bookingId = booking.id;
-        } catch (bookingError) {
-          console.error("All booking creation methods failed:", bookingError);
-          throw new Error("Unable to complete your booking. Please try again.");
-        }
+          if (!booking) {
+            throw new Error("Booking creation failed: No response received");
+          }
 
-        if (!bookingId) {
-          throw new Error("Booking was created but no ID was returned");
-        }
+          // Handle different response formats from API vs tRPC
+          let bookingResponse: any;
 
-        // If we got here and booking ID exists, show success and redirect
-        if (bookingId) {
-          console.log("✅ Booking completed successfully!", {
-            bookingId,
-            roomId,
-            roomName: roomData?.name,
-            originalAvailability: roomData?.numberofrooms,
-          });
+          if ('booking' in booking && booking.booking) {
+            bookingResponse = booking.booking;
+          } else if ('id' in booking) {
+            bookingResponse = booking;
+          } else {
+            throw new Error("Booking creation failed: Unknown response format");
+          }
 
-          // Show temporary success message before redirect
+          if (!bookingResponse.id) {
+            throw new Error("Booking creation failed: Invalid booking data returned");
+          }
+
+          bookingId = String(bookingResponse.id);
+          setLastBookingId(bookingId);
           setBookingSuccess(true);
+          setShowSuccessModal(true);
 
-          // Trigger room availability update first with direct API call for immediate effect
+          // Update room availability
           try {
-            const updateResponse = await fetch('/api/rooms/availability', {
+            await fetch('/api/rooms/availability', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -297,108 +392,70 @@ export default function BookingPage() {
                 operation: 'decrement'
               })
             });
-
-            const updateResult = await updateResponse.json();
-            console.log("Room availability update result:", updateResult);
           } catch (updateError) {
             console.error("Error updating room availability:", updateError);
-            // Continue with the process even if this fails
           }
 
-          // Trigger room list refresh using the proper function
-          if (roomId) {
-            console.log("📢 Triggering room availability update...");
-            markRoomAsBooked(roomId);
-
-            // Trigger comprehensive booking update notifications
-            notifyRoomBookingUpdate(roomId);
-
-            // Force global room data refresh through store and direct refetch
-            setShouldRefetchRooms(true);
-
-            // Only call refetchRooms if it exists (defensive check)
-            if (typeof refetchRooms === 'function') {
-              refetchRooms();
-            }
-
-            console.log("🔔 Room booking notifications sent");
+          // Trigger room list refresh
+          markRoomAsBooked(roomId);
+          notifyRoomBookingUpdate(roomId);
+          setShouldRefetchRooms(true);
+          if (typeof refetchRooms === 'function') {
+            refetchRooms();
           }
 
-          // Redirect to success page after a brief delay to show success message
           setTimeout(() => {
-            router.push(`/booking/success?booking=${bookingId}`);
+            if (bookingId) {
+              router.push(`/booking/success?booking=${bookingId}`);
+            } else {
+              router.push('/booking/success');
+            }
           }, 1500);
           return;
-        } else {
-          throw new Error("Booking creation failed. Please try again.");
+        } catch (bookingError) {
+          console.error("All booking creation methods failed:", bookingError);
+          throw new Error("Unable to complete your booking. Please try again.");
         }
       }
 
-      // If GCash payment is selected, create booking record first, then process payment
+      // GCash payment
       if (paymentMethod === "gcash") {
         try {
-          // Create a booking record first with status "PENDING_PAYMENT"
-          console.log("Creating pending booking before GCash payment...");
-
-          // Use modified booking data for pending payment
           const pendingBookingData = {
             ...bookingData,
-            status: "PENDING_PAYMENT"  // This will be updated upon successful payment
+            status: "PENDING_PAYMENT"
           };
 
-          let pendingBookingId;
+          const response = await fetch('/api/bookings/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pendingBookingData),
+          });
 
-          try {
-            // Create pending booking via direct API
-            const directResponse = await fetch('/api/bookings/create', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(pendingBookingData),
-            });
+          const result = await response.json();
 
-            const result = await directResponse.json();
-
-            if (directResponse.ok && result.success) {
-              console.log("✅ Pending booking created for GCash payment:", result.booking);
-              pendingBookingId = result.booking.id;
-            } else {
-              throw new Error(result.error || "Failed to create pending booking");
-            }
-          } catch (bookingError) {
-            console.error("Failed to create pending booking:", bookingError);
-            throw new Error("Failed to prepare payment. Please try again.");
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || "Failed to create pending booking");
           }
 
-          // Now process the GCash payment using the booking ID from our database
-          console.log("Initiating GCash payment for booking:", pendingBookingId);
+          const pendingBookingId = result.booking.id;
 
-          // Mark the room for refetch in the rooms page
-          if (roomId) {
-            markRoomAsBooked(roomId);
-
-            // Trigger comprehensive booking update notifications
-            notifyRoomBookingUpdate(roomId);
-
-            // Force global room data refresh through store and direct refetch
-            setShouldRefetchRooms(true);
-
-            // Only call refetchRooms if it exists (defensive check)
-            if (typeof refetchRooms === 'function') {
-              refetchRooms();
-            }
+          // Mark the room for refetch
+          markRoomAsBooked(roomId);
+          notifyRoomBookingUpdate(roomId);
+          setShouldRefetchRooms(true);
+          if (typeof refetchRooms === 'function') {
+            refetchRooms();
           }
 
           await processPayment({
-            amount: total,
+            amount: priceCalculations.total,
             description: `HostelHub Booking - ${room.name}`,
-            bookingId: pendingBookingId, // Use actual booking ID from database
+            bookingId: pendingBookingId,
             successUrl: `${window.location.origin}/booking/success?booking=${pendingBookingId}`,
             failureUrl: `${window.location.origin}/booking/failed?booking=${pendingBookingId}`,
           });
 
-          // Payment processing will redirect to GCash, so we don't continue here
           return;
         } catch (paymentError) {
           console.error("GCash payment preparation failed:", paymentError);
@@ -406,88 +463,49 @@ export default function BookingPage() {
             (paymentError instanceof Error ? paymentError.message : "Payment initialization error"));
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Booking failed:", error);
       setBookingSuccess(false);
 
-      // Get detailed error information for debugging
-      if (error && typeof error === 'object') {
-        if (error.shape && error.shape.message) {
-          console.error("TRPC error details:", error.shape);
-        }
-
-        if (error.cause) {
-          console.error("Error cause:", error.cause);
-        }
-
-        if (error.stack) {
-          console.error("Error stack:", error.stack);
-        }
-      }
-
-      // Handle different error types with detailed messages
       let errorMessage = "Booking failed. Please try again.";
-      let errorDetails = "";
 
       if (error instanceof Error) {
         errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        // Handle TRPC errors which have a shape property
-        if ('shape' in error && error.shape && typeof error.shape === 'object') {
-          if ('message' in error.shape) {
-            errorMessage = String(error.shape.message);
-          }
-          if ('data' in error.shape) {
-            errorDetails = JSON.stringify(error.shape.data);
-          }
-        } else if ('message' in error) {
-          errorMessage = String(error.message);
+      } else if (typeof error === 'object' && error !== null && 'shape' in error) {
+        const trpcError = error as { shape?: { message?: string, data?: unknown } };
+        if (trpcError.shape?.message) {
+          errorMessage = String(trpcError.shape.message);
         }
       }
 
-      // Try to determine if it's an authentication issue
-      if (
-        errorMessage.toLowerCase().includes('authentication') ||
+      if (errorMessage.toLowerCase().includes('authentication') ||
         errorMessage.toLowerCase().includes('unauthorized') ||
         errorMessage.toLowerCase().includes('login') ||
-        errorMessage.toLowerCase().includes('user not found')
-      ) {
-        // Force a re-login for authentication issues
-        alert("Your session has expired. Please log in again.");
+        errorMessage.toLowerCase().includes('user not found')) {
+        // Clear auth data and redirect to login
         document.cookie = 'userId=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         document.cookie = 'userEmail=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         document.cookie = 'userName=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         localStorage.removeItem('user');
 
-        // Redirect to login with return URL
         const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
         router.push(`/login?redirect=${returnUrl}`);
         return;
       }
 
-      // Set a descriptive error in the UI
       setErrors({
-        submit: `${errorMessage}${errorDetails ? ` (${errorDetails})` : ''}`
+        submit: errorMessage
       });
 
-      // Scroll to the error message
       setTimeout(() => {
         document.querySelector('.text-red-500')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [validateForm, roomQuery.data, isAuthenticated, user, dateCalculations, priceCalculations, formData, paymentMethod, roomId, room.name, createBookingMutation, markRoomAsBooked, notifyRoomBookingUpdate, setShouldRefetchRooms, refetchRooms, router, processPayment])
 
-  const handleInputChange = (field: string, value: string | boolean) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }))
-    }
-  }
-
-  // Set user's name and email from auth context if authenticated
+  // Auto-fill user data with memoization
   useEffect(() => {
     if (isAuthenticated && user) {
       setFormData(prev => ({
@@ -495,21 +513,143 @@ export default function BookingPage() {
         firstName: user.firstname || user.name?.split(' ')[0] || prev.firstName,
         lastName: user.lastname || user.name?.split(' ')[1] || prev.lastName,
         email: user.email || prev.email
-      }));
+      }))
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user])
+
+  // Memoized payment method components
+  const PaymentMethodSection = useMemo(() => {
+    if (paymentMethod === "gcash") {
+      return (
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+          <h4 className="font-medium mb-2">GCash Payment</h4>
+          <p className="text-sm text-muted-foreground mb-3">
+            You will be redirected to GCash to complete your payment securely.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="gcashNumber">GCash Mobile Number</Label>
+            <Input
+              id="gcashNumber"
+              placeholder="+63 912 345 6789"
+              value={formData.gcashNumber}
+              onChange={(e) => handleInputChange("gcashNumber", e.target.value)}
+              className={errors.gcashNumber ? "border-red-500" : ""}
+            />
+            {errors.gcashNumber && <p className="text-sm text-red-500 mt-1">{errors.gcashNumber}</p>}
+          </div>
+        </div>
+      )
+    }
+
+    if (paymentMethod === "card") {
+      return (
+        <div className="mt-4 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="cardNumber">Card Number</Label>
+            <Input
+              id="cardNumber"
+              placeholder="1234 5678 9012 3456"
+              value={formData.cardNumber}
+              onChange={(e) => handleInputChange("cardNumber", e.target.value)}
+              className={errors.cardNumber ? "border-red-500" : ""}
+            />
+            {errors.cardNumber && <p className="text-sm text-red-500 mt-1">{errors.cardNumber}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="expiry">Expiry Date</Label>
+              <Input
+                id="expiry"
+                placeholder="MM/YY"
+                value={formData.expiry}
+                onChange={(e) => handleInputChange("expiry", e.target.value)}
+                className={errors.expiry ? "border-red-500" : ""}
+              />
+              {errors.expiry && <p className="text-sm text-red-500 mt-1">{errors.expiry}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cvv">CVV</Label>
+              <Input
+                id="cvv"
+                placeholder="123"
+                value={formData.cvv}
+                onChange={(e) => handleInputChange("cvv", e.target.value)}
+                className={errors.cvv ? "border-red-500" : ""}
+              />
+              {errors.cvv && <p className="text-sm text-red-500 mt-1">{errors.cvv}</p>}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cardName">Name on Card</Label>
+            <Input
+              id="cardName"
+              placeholder="John Doe"
+              value={formData.cardName}
+              onChange={(e) => handleInputChange("cardName", e.target.value)}
+              className={errors.cardName ? "border-red-500" : ""}
+            />
+            {errors.cardName && <p className="text-sm text-red-500 mt-1">{errors.cardName}</p>}
+          </div>
+        </div>
+      )
+    }
+
+    if (paymentMethod === "cash") {
+      return (
+        <div className="mt-4 p-4 bg-green-50 rounded-lg">
+          <h4 className="font-medium mb-2">Pay at Property</h4>
+          <p className="text-sm text-muted-foreground">
+            You can pay the full amount when you arrive at the property. Please bring valid ID and the
+            booking confirmation.
+          </p>
+        </div>
+      )
+    }
+
+    return null
+  }, [paymentMethod, formData, errors, handleInputChange])
+
+  // Handle loading state AFTER all hooks are called
+  if (roomQuery.isLoading) {
+    return (
+      <AuthGuard>
+        <div className="min-h-screen bg-gray-50">
+          <header className="border-b bg-white shadow-sm">
+            <Navbar currentPath="/booking" />
+          </header>
+          <div className="container mx-auto px-4 pt-16 pb-8">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-8 mt-8">
+                <ComponentFallback className="h-10 w-80 mb-2" />
+                <ComponentFallback className="h-6 w-96" />
+              </div>
+              <div className="grid lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 space-y-6">
+                  <ComponentFallback className="h-96" />
+                  <ComponentFallback className="h-64" />
+                </div>
+                <div className="lg:col-span-1">
+                  <ComponentFallback className="h-96" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </AuthGuard>
+    )
+  }
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gray-50">
         {/* Header */}
-        <header className="border-b">
+        <header className="border-b bg-white shadow-sm">
           <Navbar currentPath="/booking" />
         </header>
 
         {/* Authentication status banner */}
         {!isAuthenticated && (
-          <div className="bg-yellow-50 border-yellow-500 border-l-4 p-4 mb-4">
+          <div className="bg-yellow-50 border-yellow-500 border-l-4 p-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
@@ -525,9 +665,12 @@ export default function BookingPage() {
           </div>
         )}
 
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 pt-16 pb-8">
           <div className="max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold mb-8">Complete Your Booking</h1>
+            <div className="mb-8 mt-8">
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Complete Your Booking</h1>
+              <p className="text-lg text-gray-600">Please fill in your details to secure your reservation</p>
+            </div>
 
             <div className="grid lg:grid-cols-3 gap-8">
               {/* Booking Form */}
@@ -657,86 +800,8 @@ export default function BookingPage() {
                       </div>
                     </div>
 
-                    {paymentMethod === "gcash" && (
-                      <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                        <h4 className="font-medium mb-2">GCash Payment</h4>
-                        <p className="text-sm text-muted-foreground mb-3">
-                          You will be redirected to GCash to complete your payment securely.
-                        </p>
-                        <div className="space-y-2">
-                          <Label htmlFor="gcashNumber">GCash Mobile Number</Label>
-                          <Input
-                            id="gcashNumber"
-                            placeholder="+63 912 345 6789"
-                            value={formData.gcashNumber}
-                            onChange={(e) => handleInputChange("gcashNumber", e.target.value)}
-                            className={errors.gcashNumber ? "border-red-500" : ""}
-                          />
-                          {errors.gcashNumber && <p className="text-sm text-red-500 mt-1">{errors.gcashNumber}</p>}
-                        </div>
-                      </div>
-                    )}
-
-                    {paymentMethod === "card" && (
-                      <div className="mt-4 space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="cardNumber">Card Number</Label>
-                          <Input
-                            id="cardNumber"
-                            placeholder="1234 5678 9012 3456"
-                            value={formData.cardNumber}
-                            onChange={(e) => handleInputChange("cardNumber", e.target.value)}
-                            className={errors.cardNumber ? "border-red-500" : ""}
-                          />
-                          {errors.cardNumber && <p className="text-sm text-red-500 mt-1">{errors.cardNumber}</p>}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="expiry">Expiry Date</Label>
-                            <Input
-                              id="expiry"
-                              placeholder="MM/YY"
-                              value={formData.expiry}
-                              onChange={(e) => handleInputChange("expiry", e.target.value)}
-                              className={errors.expiry ? "border-red-500" : ""}
-                            />
-                            {errors.expiry && <p className="text-sm text-red-500 mt-1">{errors.expiry}</p>}
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="cvv">CVV</Label>
-                            <Input
-                              id="cvv"
-                              placeholder="123"
-                              value={formData.cvv}
-                              onChange={(e) => handleInputChange("cvv", e.target.value)}
-                              className={errors.cvv ? "border-red-500" : ""}
-                            />
-                            {errors.cvv && <p className="text-sm text-red-500 mt-1">{errors.cvv}</p>}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cardName">Name on Card</Label>
-                          <Input
-                            id="cardName"
-                            placeholder="John Doe"
-                            value={formData.cardName}
-                            onChange={(e) => handleInputChange("cardName", e.target.value)}
-                            className={errors.cardName ? "border-red-500" : ""}
-                          />
-                          {errors.cardName && <p className="text-sm text-red-500 mt-1">{errors.cardName}</p>}
-                        </div>
-                      </div>
-                    )}
-
-                    {paymentMethod === "cash" && (
-                      <div className="mt-4 p-4 bg-green-50 rounded-lg">
-                        <h4 className="font-medium mb-2">Pay at Property</h4>
-                        <p className="text-sm text-muted-foreground">
-                          You can pay the full amount when you arrive at the property. Please bring valid ID and the
-                          booking confirmation.
-                        </p>
-                      </div>
-                    )}
+                    {PaymentMethodSection}
+                    {errors.payment && <p className="text-sm text-red-500 mt-1">{errors.payment}</p>}
                   </CardContent>
                 </Card>
 
@@ -797,7 +862,15 @@ export default function BookingPage() {
                     {/* Room Details */}
                     <div className="flex space-x-3">
                       <div className="relative w-16 h-16 rounded-lg overflow-hidden">
-                        <Image src={room.image || "/placeholder.svg"} alt={room.name} fill className="object-cover" />
+                        <Image
+                          src={room.image}
+                          alt={room.name}
+                          fill
+                          className="object-cover"
+                          sizes="64px"
+                          priority={false}
+                          loading="lazy"
+                        />
                       </div>
                       <div className="flex-1">
                         <h3 className="font-medium">{room.name}</h3>
@@ -814,44 +887,25 @@ export default function BookingPage() {
                           <Calendar className="w-4 h-4 mr-2" />
                           Check-in
                         </span>
-                        <span>{checkIn}</span>
+                        <span>{dateCalculations.checkIn}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center">
                           <Calendar className="w-4 h-4 mr-2" />
                           Check-out
                         </span>
-                        <span>{checkOut}</span>
+                        <span>{dateCalculations.checkOut}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span className="flex items-center">
                           <Users className="w-4 h-4 mr-2" />
                           Guests
                         </span>
-                        <span>{guests}</span>
+                        <span>{dateCalculations.guests}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span>Nights</span>
-                        <span>{nights}</span>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Amenities */}
-                    <div>
-                      <h4 className="font-medium mb-2">Included Amenities</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {(typeof room.amenities === 'string'
-                          ? room.amenities.split(',').map(a => a.trim())
-                          : Array.isArray(room.amenities)
-                            ? room.amenities
-                            : []
-                        ).map((amenity) => (
-                          <Badge key={amenity} variant="secondary" className="text-xs">
-                            {amenity}
-                          </Badge>
-                        ))}
+                        <span>{dateCalculations.nights}</span>
                       </div>
                     </div>
 
@@ -861,25 +915,30 @@ export default function BookingPage() {
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>
-                          ₱{room.price.toLocaleString()} × {nights} nights
+                          ₱{room.price.toLocaleString()} × {dateCalculations.nights} nights
                         </span>
-                        <span>₱{subtotal.toLocaleString()}</span>
+                        <span>₱{priceCalculations.subtotal.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span>Service fee</span>
-                        <span>₱{serviceFee.toLocaleString()}</span>
+                        <span>₱{priceCalculations.serviceFee.toLocaleString()}</span>
                       </div>
                       <Separator />
                       <div className="flex justify-between font-medium">
                         <span>Total</span>
-                        <span>₱{total.toLocaleString()}</span>
+                        <span>₱{priceCalculations.total.toLocaleString()}</span>
                       </div>
                     </div>
 
-                    <Button className="w-full" size="lg" onClick={handleSubmit} disabled={isLoading}>
-                      {isLoading ? (
+                    <Button
+                      className="w-full"
+                      size="lg"
+                      onClick={handleSubmit}
+                      disabled={isLoading || paymentLoading}
+                    >
+                      {isLoading || paymentLoading ? (
                         <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          <LoadingSpinner />
                           Processing...
                         </>
                       ) : (
@@ -898,24 +957,42 @@ export default function BookingPage() {
             </div>
           </div>
         </div>
-        {bookingSuccess && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white p-8 rounded-lg max-w-md mx-4">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-8 h-8 text-green-600" />
+
+        {/* Success Modal with Suspense */}
+        <Suspense fallback={<ComponentFallback className="fixed inset-0 bg-black bg-opacity-50" />}>
+          {showSuccessModal && (
+            <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Booking Confirmed!</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 text-center">
+                  <div className="text-2xl mb-2">🎉</div>
+                  <div className="mb-4">Your booking was successful. You will receive a confirmation email shortly.</div>
                 </div>
-                <h3 className="text-xl font-semibold mb-2">Booking Confirmed!</h3>
-                <p className="text-gray-600 mb-4">
-                  Your reservation has been successfully submitted. You will receive a confirmation email shortly.
-                </p>
-                <Link href="/dashboard">
-                  <Button className="w-full">View My Bookings</Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
+                <DialogFooter className="flex flex-col gap-2">
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setShowSuccessModal(false)
+                      router.push("/dashboard")
+                    }}
+                    variant="default"
+                  >
+                    View bookings
+                  </Button>
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={() => setShowSuccessModal(false)}
+                  >
+                    Close
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+        </Suspense>
       </div>
     </AuthGuard>
   )

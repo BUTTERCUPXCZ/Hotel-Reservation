@@ -87,12 +87,25 @@ export default function LoginPage() {
           errorMessage = "Login request timed out. Please check your internet connection and try again.";
         } else if (errorMessage.includes("ECONNREFUSED")) {
           errorMessage = "Service temporarily unavailable. Please try again in a few minutes.";
-        } else if (errorMessage.includes("Invalid email or password")) {
-          errorMessage = "Invalid email or password. Please check your credentials and try again.";
+        } else if (errorMessage.includes("Invalid email or password") ||
+          errorMessage.includes("Invalid credentials") ||
+          errorMessage.includes("Authentication failed") ||
+          errorMessage.includes("User not found") ||
+          errorMessage.includes("Incorrect password")) {
+          // Enhanced error message for invalid credentials
+          setErrors({
+            submit: "The email or password you entered is incorrect. Please check your credentials and try again.",
+            email: "Please verify your email address",
+            password: "Please verify your password"
+          });
+          return;
         } else if (errorMessage.includes("Cannot connect to database server")) {
           errorMessage = "Database service is currently unavailable. Please try again in a few moments.";
         } else if (errorMessage.includes("Service temporarily unavailable")) {
           errorMessage = "Service temporarily unavailable. Please try again in a few moments.";
+        } else {
+          // Generic invalid credentials message for any unhandled authentication errors
+          errorMessage = "The email or password you entered is incorrect. Please check your credentials and try again.";
         }
 
         setErrors({ submit: errorMessage });
@@ -123,13 +136,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mb-4 text-center p-3 bg-blue-50 text-blue-700 rounded-md text-xs">
-              <p className="font-medium mb-1">Demo Credentials:</p>
-              <p>Email: demo@example.com</p>
-              <p>Password: demo123</p>
-            </div>
-          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -194,8 +200,11 @@ export default function LoginPage() {
             </div>
 
             {errors.submit && (
-              <div className="text-center p-2 bg-red-50 text-red-600 rounded-md text-sm">
-                {errors.submit}
+              <div className="text-center p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm">
+                <div className="flex items-center justify-center space-x-2">
+
+                  <span className="font-medium">{errors.submit}</span>
+                </div>
               </div>
             )}
           </form>
