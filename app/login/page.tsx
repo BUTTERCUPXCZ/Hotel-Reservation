@@ -117,14 +117,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-100">
+      <Card className="w-full max-w-md" style={{ backgroundColor: '#FAFAFA', borderColor: '#E0E0E0' }}>
         <CardHeader className="text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">HH</span>
+              <span className="text-primary-foreground font-bold">K</span>
             </div>
-            <span className="text-xl font-bold">HostelHub</span>
+            <span className="text-xl font-bold">Kayan</span>
           </div>
           <CardTitle>Welcome back</CardTitle>
           <CardDescription>Sign in to your account to continue</CardDescription>

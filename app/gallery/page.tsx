@@ -49,7 +49,7 @@ export default function GalleryPage() {
     ]
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen" style={{ backgroundColor: '#F5EFE6' }}>
             {isLoading && <LoadingScreen onComplete={handleLoadingComplete} />}
 
             {showContent && (

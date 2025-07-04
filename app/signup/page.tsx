@@ -91,8 +91,8 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-100">
+      <Card className="w-full max-w-md" style={{ backgroundColor: '#FAFAFA', borderColor: '#E0E0E0' }}>
         <CardHeader className="text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">

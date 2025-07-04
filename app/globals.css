@@ -4,6 +4,10 @@
 
 /* Import custom scrollbar styles */
 @import url('../styles/scrollbar.css');
+/* Import theme styles */
+@import url('../styles/theme.css');
+/* Import ultra-optimized hero animations */
+@import url('../styles/hero-optimized.css');
 
 @layer base {
   :root {

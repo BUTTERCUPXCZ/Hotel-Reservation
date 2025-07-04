@@ -49,10 +49,14 @@ model Room {
   updatedAt     DateTime  @updatedAt
   bookings      Booking[]
   amenities     String?
+  feature       String?
 
   // New fields for images
   imageUrl String? // The actual image URL
-  imageAlt String? // Optional alt text
+  imageAlt String? // Optional alt text 
+
+  // New field for type of bed
+  bedType String? // e.g., "Queen", "Twin", "King", "Double"
 }
 
 model Booking {

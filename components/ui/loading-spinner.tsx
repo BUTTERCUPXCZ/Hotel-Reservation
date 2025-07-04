@@ -15,11 +15,11 @@ export function LoadingSpinner({ size = "md", className }: LoadingSpinnerProps) 
   return (
     <div
       className={cn(
-        "animate-spin rounded-full border-2 border-gray-300",
+        "animate-spin rounded-full border-2",
         sizeClasses[size],
         className,
       )}
-      style={{ borderTopColor: '#6AB19A' }}
+      style={{ borderColor: 'rgba(106, 177, 154, 0.2)', borderTopColor: '#6AB19A' }}
     />
   )
 }

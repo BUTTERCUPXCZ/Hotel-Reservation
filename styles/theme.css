@@ -1,0 +1,33 @@
+:root {
+    --background: #F5EFE6;
+    --card-background: #FAFAFA;
+    --card-border: #E0E0E0;
+    --primary: #6AB19A;
+    --primary-light: rgba(106, 177, 154, 0.15);
+    --primary-foreground: #FFFFFF;
+    --text: #2E2E2E;
+    --text-muted: #6C6C6C;
+}
+
+.themed-background {
+    background-color: var(--background);
+}
+
+.themed-card {
+    background-color: var(--card-background);
+    border-color: var(--card-border);
+}
+
+.themed-primary {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+}
+
+.themed-primary-light {
+    background-color: var(--primary-light);
+}
+
+/* Themed skeleton */
+.themed-skeleton {
+    background-color: var(--primary-light);
+}

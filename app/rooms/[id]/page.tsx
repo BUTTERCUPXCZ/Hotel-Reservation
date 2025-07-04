@@ -52,6 +52,7 @@ interface DBRoom {
     id: string;
     name: string;
   };
+  // Features are derived from amenities, not a separate property in the database
 }
 
 interface UIRoomDetails {
@@ -73,6 +74,12 @@ interface UIRoomDetails {
     description: string;
   }[];
   features: string[];
+  dbFeatures: {
+    id: string;
+    name: string;
+    description: string | null;
+    icon: string | null;
+  }[];
   policies: string[];
   location: {
     address: string;
@@ -184,7 +191,12 @@ export default function RoomDetailsPage() {
           id: roomData.id,
           name: roomData.name,
           description: roomData.description || "Comfortable accommodation with modern amenities",
-          longDescription: roomData.description || "This room offers a comfortable stay with all the amenities you need for a pleasant experience. The property features modern facilities and is maintained to high standards of cleanliness and comfort.",
+          longDescription: roomData.description ||
+            (roomData.roomType?.name === "Private Room" || (!roomData.roomType?.name && roomData.maxOccupancy === 1) ?
+              "Cozy queen bed, A/C, private bathroom, and tranquil jungle or garden views—perfect for a peaceful retreat." :
+              roomData.roomType?.name === "Shared Room (4 pax max)" || (!roomData.roomType?.name && roomData.maxOccupancy <= 4) ?
+                "Single bed in a mixed or all-female dorm with lockers, privacy curtains, A/C, and shared bath." :
+                "Spacious mixed dorm with six single beds, individual lockers and privacy curtains, air conditioning and shared bathroom. Ideal for budget travelers or small groups."),
           price: roomData.pricePerNight,
           images: roomData.imageUrl ?
             [
@@ -201,11 +213,15 @@ export default function RoomDetailsPage() {
             ],
           capacity: roomData.maxOccupancy,
           bedType: roomData.roomType?.name || (roomData.maxOccupancy > 1 ? "Double/Twin" : "Single"),
-          roomType: roomData.roomType?.name || "Standard Room",
+          roomType: roomData.roomType?.name ||
+            (roomData.maxOccupancy === 1 ? "Private Room" :
+              roomData.maxOccupancy <= 4 ? "Shared Room (4 pax max)" :
+                "Shared Room (6 pax max)"),
           checkInTime: "2:00 PM",
           checkOutTime: "12:00 PM",
           amenities: formattedAmenities,
           features: [...new Set(featuresArray)], // Remove duplicates
+          dbFeatures: [], // Since the features property doesn't exist, we initialize with an empty array
           policies: [
             "Check-in: 2:00 PM - 10:00 PM",
             "Check-out: 11:00 AM - 12:00 PM",
@@ -331,7 +347,7 @@ export default function RoomDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gray-100">
         {/* Header */}
         <header className="bg-white border-b sticky top-0 z-40">
           <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -376,7 +392,7 @@ export default function RoomDetailsPage() {
 
   if (!room) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Room not found</h1>
           <Link href="/rooms">
@@ -393,9 +409,9 @@ export default function RoomDetailsPage() {
   const total = subtotal + serviceFee
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-40">
+      <header className="border-b sticky top-0 z-40" style={{ backgroundColor: '#FAFAFA', borderColor: '#E0E0E0' }}>
         <Navbar currentPath={`/rooms/${roomId}`} />
       </header>
 
@@ -513,22 +529,133 @@ export default function RoomDetailsPage() {
             {/* Room Description */}
             <Card>
               <CardHeader>
-                <CardTitle>About this room</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Home className="w-5 h-5 text-primary" />
+                  About this room
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 mb-4">{room.longDescription}</p>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Capacity:</span>
-                    <div className="flex items-center mt-1">
-                      <Users className="w-4 h-4 mr-1" />
-                      {room.capacity} guests
+              <CardContent className="space-y-6">
+                {/* Main description with highlighted text */}
+                <div className="bg-muted/50 p-4 rounded-lg border border-muted">
+                  <p className="text-gray-700 leading-relaxed">{room.longDescription}</p>
+                </div>
+
+                {/* Key Info Section */}
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div className="bg-background p-3 rounded-lg border shadow-sm flex flex-col items-center justify-center text-center hover:border-primary hover:shadow-md transition-all">
+                    <Users className="w-5 h-5 text-primary mb-2" />
+                    <span className="font-semibold">Capacity</span>
+                    <span className="text-gray-700">2 guests</span>
+                  </div>
+                  <div className="bg-background p-3 rounded-lg border shadow-sm flex flex-col items-center justify-center text-center hover:border-primary hover:shadow-md transition-all">
+                    <Clock className="w-5 h-5 text-primary mb-2" />
+                    <span className="font-semibold">Check-in</span>
+                    <span className="text-gray-700">2:00 PM</span>
+                  </div>
+                  <div className="bg-background p-3 rounded-lg border shadow-sm flex flex-col items-center justify-center text-center hover:border-primary hover:shadow-md transition-all">
+                    <Clock className="w-5 h-5 text-primary mb-2" />
+                    <span className="font-semibold">Check-out</span>
+                    <span className="text-gray-700">11:00 AM</span>
+                  </div>
+                </div>
+
+
+
+                <div className="pt-4">
+                  {room.roomType === "Private Room" && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-900 flex items-center">
+                        <Home className="w-5 h-5 text-primary mr-2" />
+                        <span className="text-lg">Private Room Details</span>
+                      </h4>
+                      <div className="bg-background p-4 rounded-lg border">
+                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Queen bed</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Air conditioning</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>En-suite bathroom</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Jungle or garden view</span>
+                          </li>
+                        </ul>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <span className="font-medium">Bed Type:</span>
-                    <div className="mt-1">{room.bedType}</div>
-                  </div>
+                  )}
+
+                  {room.roomType === "Shared Room (4 pax max)" && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-900 flex items-center">
+                        <Users className="w-5 h-5 text-primary mr-2" />
+                        <span className="text-lg">Shared Room Details (4 pax max)</span>
+                      </h4>
+                      <div className="bg-background p-4 rounded-lg border">
+                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Single bed in mixed/female dorm</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Lockers provided</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Privacy curtains</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Shared bathroom</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+
+                  {room.roomType === "Shared Room (6 pax max)" && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-900 flex items-center">
+                        <Users className="w-5 h-5 text-primary mr-2" />
+                        <span className="text-lg">Shared Room Details (6 pax max)</span>
+                      </h4>
+                      <div className="bg-background p-4 rounded-lg border">
+                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Six single beds in mixed dorm</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Individual lockers</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Privacy curtains</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Air conditioning</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Shared bathroom</span>
+                          </li>
+                          <li className="flex items-center gap-2 text-gray-700">
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            <span>Budget-friendly</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -552,37 +679,93 @@ export default function RoomDetailsPage() {
                     </div>
                   ))}
                 </div>
+
+
               </CardContent>
             </Card>
 
             {/* Policies */}
             <Card>
               <CardHeader>
-                <CardTitle>House Rules & Policies</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  House Rules & Policies
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="font-medium mb-2 flex items-center">
-                      <Clock className="w-4 h-4 mr-2" />
-                      Check-in/out Times
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-background p-4 rounded-lg border">
+                    <h4 className="font-medium mb-4 flex items-center text-lg border-b pb-2">
+                      <Clock className="w-5 h-5 text-primary mr-2" />
+                      Check-In and Check-Out
                     </h4>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <div>Check-in: {room.checkInTime}</div>
-                      <div>Check-out: {room.checkOutTime}</div>
+                    <div className="text-sm text-gray-700 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Check-in: 2:00 PM</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Check-out: 11:00 AM</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Early check-in and late check-out are subject to availability—just ask!</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Please have your ID ready upon arrival.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Balance (if any) is payable at check-in via cash, GCash, or bank transfer.</span>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium mb-2">Important Policies</h4>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      {room.policies.slice(2).map((policy: string, index: number) => (
-                        <li key={index} className="flex items-start">
-                          <span className="w-1 h-1 bg-gray-400 rounded-full mt-2 mr-2 flex-shrink-0"></span>
-                          {policy}
-                        </li>
-                      ))}
-                    </ul>
+
+                  <div className="bg-background p-4 rounded-lg border">
+                    <h4 className="font-medium mb-4 flex items-center text-lg border-b pb-2">
+                      <Home className="w-5 h-5 text-primary mr-2" />
+                      House Rules
+                    </h4>
+                    <div className="text-sm text-gray-700 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Respect the space, the people, and the island.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Quiet hours begin at 10 PM in shared areas.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Visitors are not allowed inside dorm rooms.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Keep shared spaces clean. Leave them how you'd want to find them.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Kayan is pet-friendly, but please let us know ahead if you're bringing one.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>Smoking is allowed in designated outdoor areas only.</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-lg text-primary font-light flex-shrink-0">·</span>
+                        <span>We're here to help. Talk to us about any concerns during your stay.</span>
+                      </div>
+                    </div>
                   </div>
+                </div>
+
+                <div className="bg-muted/30 p-4 rounded-lg border-dashed border border-muted">
+                  <p className="text-sm text-center text-gray-600 italic">
+                    These policies help us ensure all guests have a comfortable and enjoyable stay.
+                    Thank you for your cooperation!
+                  </p>
                 </div>
               </CardContent>
             </Card>

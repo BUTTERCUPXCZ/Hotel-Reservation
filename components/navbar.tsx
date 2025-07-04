@@ -64,8 +64,8 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
     const navigationLinks = [
         { href: "/", label: "Home" },
         { href: "/rooms", label: "Rooms" },
-        { href: "/about", label: "About" },
-        { href: "/contact", label: "Contact" }
+        { href: "/discovery", label: "Discovery" },
+        { href: "/Contact", label: "Contact" }
     ]
 
     // Desktop navigation links
@@ -138,10 +138,10 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
     const logo = (
         <Link href="/" className="flex items-center space-x-3 group">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-200 group-hover:scale-105" style={{ backgroundColor: '#6AB19A' }}>
-                <span className="text-white font-bold text-lg">H</span>
+                <span className="text-white font-bold text-lg">K</span>
             </div>
             <span className="text-xl font-bold" style={{ color: '#2E2E2E' }}>
-                HostelHub
+                Kayan
             </span>
         </Link>
     )
@@ -154,19 +154,27 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
                     <DropdownMenuTrigger asChild>
                         <Button
                             variant="ghost"
-                            className="flex items-center space-x-2 h-10 px-3 transition-all duration-200 hover:bg-white/80"
-                            style={{ color: '#2E2E2E' }}
+                            className="flex items-center space-x-2 h-10 px-4 rounded-full transition-all duration-300 hover:bg-gradient-to-r hover:from-white/80 hover:to-emerald-50/70 group"
+                            style={{ color: '#2E2E2E', border: '1px solid rgba(106, 177, 154, 0.15)' }}
                         >
-                            <Avatar className="h-7 w-7 ring-2" style={{ '--tw-ring-color': 'rgba(106, 177, 154, 0.2)' } as React.CSSProperties}>
-                                <AvatarImage src={user?.avatar || "/placeholder-user.jpg"} alt={user?.name && decodeURIComponent(user.name) || "User"} />
-                                <AvatarFallback className="text-xs" style={{ backgroundColor: 'rgba(106, 177, 154, 0.1)', color: '#6AB19A' }}>
-                                    {(user?.name && decodeURIComponent(user.name).charAt(0)) || user?.firstname?.charAt(0) || "U"}
-                                </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium max-w-24 truncate" style={{ color: '#2E2E2E' }}>
-                                {user?.firstname || (user?.name && decodeURIComponent(user.name).split(" ")[0]) || "User"}
-                            </span>
-                            <ChevronDown className="h-4 w-4" style={{ color: '#5A5A5A' }} />
+                            <div className="relative">
+                                <Avatar className="h-8 w-8 ring-2 transition-all duration-300 group-hover:ring-4 group-hover:scale-105"
+                                    style={{ '--tw-ring-color': 'rgba(106, 177, 154, 0.3)' } as React.CSSProperties}>
+                                    <AvatarImage src={user?.avatar || "/placeholder-user.jpg"} alt={user?.name && decodeURIComponent(user.name) || "User"} />
+                                    <AvatarFallback className="text-xs font-bold"
+                                        style={{ backgroundColor: 'rgba(106, 177, 154, 0.2)', color: '#3C8B73' }}>
+                                        {(user?.name && decodeURIComponent(user.name).charAt(0)) || user?.firstname?.charAt(0) || "U"}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></span>
+                            </div>
+                            <div className="flex flex-col -space-y-0.5 items-start">
+                                <span className="text-sm font-medium max-w-24 truncate" style={{ color: '#2E2E2E' }}>
+                                    {user?.firstname || (user?.name && decodeURIComponent(user.name).split(" ")[0]) || "User"}
+                                </span>
+                                <span className="text-xs opacity-70" style={{ color: '#6AB19A' }}>Welcome back!</span>
+                            </div>
+                            <ChevronDown className="h-4 w-4 ml-1 transition-transform group-hover:rotate-180" style={{ color: '#5A5A5A' }} />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
@@ -229,32 +237,52 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
         >
             {isAuthenticated ? (
                 <>
-                    <div className="flex items-center space-x-3 px-4 py-3 rounded-lg" style={{ backgroundColor: 'rgba(106, 177, 154, 0.05)' }}>
-                        <Avatar className="h-10 w-10 ring-2" style={{ '--tw-ring-color': 'rgba(106, 177, 154, 0.2)' } as React.CSSProperties}>
-                            <AvatarImage src={user?.avatar || "/placeholder-user.jpg"} alt={user?.name && decodeURIComponent(user.name) || "User"} />
-                            <AvatarFallback style={{ backgroundColor: 'rgba(106, 177, 154, 0.1)', color: '#6AB19A' }}>
-                                {(user?.name && decodeURIComponent(user.name).charAt(0)) || user?.firstname?.charAt(0) || "U"}
-                            </AvatarFallback>
-                        </Avatar>
+                    <div className="flex items-center space-x-4 px-5 py-4 rounded-xl"
+                        style={{
+                            background: 'linear-gradient(to right, rgba(106, 177, 154, 0.1), rgba(106, 177, 154, 0.05))',
+                            borderLeft: '3px solid #6AB19A'
+                        }}>
+                        <div className="relative">
+                            <Avatar className="h-12 w-12 ring-2 ring-offset-2"
+                                style={{ '--tw-ring-color': 'rgba(106, 177, 154, 0.4)', '--tw-ring-offset-color': 'rgba(255, 255, 255, 0.8)' } as React.CSSProperties}>
+                                <AvatarImage src={user?.avatar || "/placeholder-user.jpg"} alt={user?.name && decodeURIComponent(user.name) || "User"} />
+                                <AvatarFallback className="text-sm font-bold" style={{ backgroundColor: 'rgba(106, 177, 154, 0.2)', color: '#3C8B73' }}>
+                                    {(user?.name && decodeURIComponent(user.name).charAt(0)) || user?.firstname?.charAt(0) || "U"}
+                                </AvatarFallback>
+                            </Avatar>
+                            <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white"></span>
+                        </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate" style={{ color: '#2E2E2E' }}>
-                                {user?.firstname || (user?.name && decodeURIComponent(user.name).split(" ")[0]) || "User"}
-                            </p>
-                            <p className="text-xs truncate" style={{ color: '#5A5A5A' }}>
+                            <div className="flex items-center">
+                                <p className="text-base font-semibold truncate" style={{ color: '#2E2E2E' }}>
+                                    {user?.firstname || (user?.name && decodeURIComponent(user.name).split(" ")[0]) || "User"}
+                                </p>
+                                <span className="ml-2 px-2 py-0.5 text-xs rounded-full" style={{ backgroundColor: 'rgba(106, 177, 154, 0.2)', color: '#3C8B73' }}>
+                                    Guest
+                                </span>
+                            </div>
+                            <p className="text-xs truncate mt-1" style={{ color: '#5A5A5A' }}>
                                 {user?.email || "user@example.com"}
+                            </p>
+                            <p className="text-xs mt-1 font-medium" style={{ color: '#6AB19A' }}>
+                                Welcome back! Your last login was today.
                             </p>
                         </div>
                     </div>
                     <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
-                        <Button variant="ghost" size="sm" className="w-full justify-start h-11 hover:bg-white/50" style={{ color: '#2E2E2E' }}>
-                            <User className="mr-2 h-4 w-4" />
-                            Dashboard
+                        <Button variant="ghost" size="sm" className="w-full justify-start h-12 rounded-lg hover:bg-white/50 hover:translate-x-1 transition-all"
+                            style={{ color: '#2E2E2E', border: '1px solid rgba(106, 177, 154, 0.1)' }}>
+                            <User className="mr-3 h-4 w-4 text-emerald-600" />
+                            <span>Dashboard</span>
+                            <div className="ml-auto opacity-50">→</div>
                         </Button>
                     </Link>
                     <Link href="/settings" onClick={() => setIsMobileMenuOpen(false)}>
-                        <Button variant="ghost" size="sm" className="w-full justify-start h-11 hover:bg-white/50" style={{ color: '#2E2E2E' }}>
-                            <Settings className="mr-2 h-4 w-4" />
-                            Settings
+                        <Button variant="ghost" size="sm" className="w-full justify-start h-12 rounded-lg hover:bg-white/50 hover:translate-x-1 transition-all"
+                            style={{ color: '#2E2E2E', border: '1px solid rgba(106, 177, 154, 0.1)' }}>
+                            <Settings className="mr-3 h-4 w-4 text-emerald-600" />
+                            <span>Settings</span>
+                            <div className="ml-auto opacity-50">→</div>
                         </Button>
                     </Link>
                     <Button
@@ -264,11 +292,12 @@ export function Navbar({ currentPath = "/" }: NavbarProps) {
                             setIsMobileMenuOpen(false)
                             handleSafeLogout()
                         }}
-                        className="text-red-600 hover:bg-red-50 w-full h-11"
+                        className="text-red-600 hover:bg-red-50 w-full h-12 rounded-lg transition-all hover:translate-x-1 mt-1"
                         style={{ borderColor: '#E0E0E0' }}
                     >
-                        <LogOut className="mr-2 h-4 w-4" />
-                        Logout
+                        <LogOut className="mr-3 h-4 w-4" />
+                        <span>Logout</span>
+                        <div className="ml-auto opacity-50">→</div>
                     </Button>
                 </>
             ) : (

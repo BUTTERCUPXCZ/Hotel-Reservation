@@ -35,8 +35,10 @@ CREATE TABLE "Room" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "amenities" TEXT,
+    "feature" TEXT,
     "imageUrl" TEXT,
     "imageAlt" TEXT,
+    "bedType" TEXT,
 
     CONSTRAINT "Room_pkey" PRIMARY KEY ("id")
 );

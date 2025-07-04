@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Montserrat } from "next/font/google"
 import "./globals.css"
+import "../styles/animations.css"
 import { TRPCProvider } from "@/components/trpc-provider"
 import AuthProvider from "@/components/auth-provider"
 
@@ -9,10 +10,17 @@ const inter = Inter({ subsets: ["latin"] })
 const montserrat = Montserrat({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "HostelHub - Your Perfect Stay Awaits",
-  description: "Discover comfortable, affordable hostel accommodations with modern amenities and exceptional service.",
-  keywords: "hostel, accommodation, budget travel, booking, Philippines",
-  generator: 'v0.dev'
+  title: "Kayan Hostel - Your Gateway to Siargao",
+  description: "Experience authentic Siargao living at Kayan Hostel. From surf sessions to island hopping, discover the soul of Siargao.",
+  keywords: "Kayan, hostel, Siargao, Philippines, surf, island hopping, accommodation, travel",
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '32x32', type: 'image/x-icon' }
+    ],
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({

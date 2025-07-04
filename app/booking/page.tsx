@@ -613,8 +613,8 @@ export default function BookingPage() {
   if (roomQuery.isLoading) {
     return (
       <AuthGuard>
-        <div className="min-h-screen bg-gray-50">
-          <header className="border-b bg-white shadow-sm">
+        <div className="min-h-screen bg-gray-100">
+          <header className="border-b shadow-sm" style={{ backgroundColor: '#FAFAFA', borderColor: '#E0E0E0' }}>
             <Navbar currentPath="/booking" />
           </header>
           <div className="container mx-auto px-4 pt-16 pb-8">
@@ -641,7 +641,7 @@ export default function BookingPage() {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-100">
         {/* Header */}
         <header className="border-b bg-white shadow-sm">
           <Navbar currentPath="/booking" />

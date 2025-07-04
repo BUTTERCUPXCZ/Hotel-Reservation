@@ -20,7 +20,7 @@ function DashboardContent() {
 
   const userBookingsQuery = trpc.rooms.getUserBookings.useQuery(undefined, {
     enabled: !!user, // Only run the query if the user is logged in
-    retry: (failureCount, error) => {
+    retry: (failureCount: number, error: any) => {
       // Don't retry on 401 errors (authentication issues)
       if (error.data?.code === 'UNAUTHORIZED') {
         return false;
@@ -38,7 +38,7 @@ function DashboardContent() {
   useEffect(() => {
     if (userBookingsQuery.data) {
       // Filter out any dummy, test, or placeholder data
-      const validBookings = userBookingsQuery.data.filter(booking => {
+      const validBookings = userBookingsQuery.data.filter((booking: any) => {
         if (!booking || !booking.id) return false;
 
         const idStr = booking.id.toString().toLowerCase();
@@ -60,7 +60,7 @@ function DashboardContent() {
         return !isDummyData;
       });
 
-      const formattedBookings = validBookings.map(booking => ({
+      const formattedBookings = validBookings.map((booking: any) => ({
         id: booking.id,
         roomName: booking.room?.name || "Unknown Room",
         checkIn: new Date(booking.checkInDate).toLocaleDateString(),
@@ -119,15 +119,15 @@ function DashboardContent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gray-100">
         {/* Header */}
         <header className="border-b">
           <div className="container mx-auto px-4 py-4 flex items-center justify-between">
             <Link href="/" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold">H</span>
+                <span className="text-primary-foreground font-bold">K</span>
               </div>
-              <span className="text-xl font-bold">HostelHub</span>
+              <span className="text-xl font-bold">Kayan</span>
             </Link>
             <div className="flex items-center space-x-4">
               <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
@@ -171,15 +171,15 @@ function DashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold">H</span>
+              <span className="text-primary-foreground font-bold">K</span>
             </div>
-            <span className="text-xl font-bold">HostelHub</span>
+            <span className="text-xl font-bold">Kayan</span>
           </Link>
           <div className="flex items-center space-x-4">
             <span className="font-medium">Hi, {user?.name && decodeURIComponent(user.name) || user?.firstname || "Guest"}</span>
@@ -215,7 +215,7 @@ function DashboardContent() {
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">My Bookings</h2>
                 <Link href="/rooms">
-                  <Button>Book New Room</Button>
+                  <Button className="bg-[#6AB19A] text-white hover:bg-[#5a9c87]">Book New Room</Button>
                 </Link>
               </div>
 
@@ -304,7 +304,7 @@ function DashboardContent() {
                       You haven't made any reservations yet. Start exploring our available rooms and make your first booking!
                     </p>
                     <Link href="/rooms">
-                      <Button size="lg" className="px-8">
+                      <Button size="lg" className="px-8 bg-[#6AB19A] text-white hover:bg-[#5a9c87]">
                         Explore Rooms
                       </Button>
                     </Link>
@@ -357,7 +357,7 @@ function DashboardContent() {
                     <label className="text-sm font-medium">Phone</label>
                     <input className="w-full p-2 border rounded-md" defaultValue="+63 912 345 6789" />
                   </div>
-                  <Button>Save Changes</Button>
+                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">Save Changes</Button>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -404,8 +404,8 @@ function DashboardContent() {
                   <div className="space-y-4">
                     <h3 className="font-medium">Security</h3>
                     <div className="space-y-2">
-                      <Button variant="outline">Change Password</Button>
-                      <Button variant="outline">Enable Two-Factor Authentication</Button>
+                      <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground">Change Password</Button>
+                      <Button variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground">Enable Two-Factor Authentication</Button>
                     </div>
                   </div>
 

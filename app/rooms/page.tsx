@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, memo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -53,10 +53,12 @@ interface DBRoom {
     amenities: string | null;
     imageUrl: string | null;
     imageAlt: string | null;
+    bedType: string | null;
     roomType: {
         id: string;
         name: string;
     };
+    // Room features are derived from amenities, not a separate property
 }
 
 interface UIRoom {
@@ -64,30 +66,132 @@ interface UIRoom {
     name: string;
     description: string;
     price: number;
-    originalPrice?: number;
-    rating: number;
-    reviewCount: number;
     image: string;
-    images: string[];
     capacity: number;
-    floor: string;
-    size: string;
-    bedType: string;
     amenities: string[];
     features: string[];
-    popular?: boolean;
-    discount?: number;
     availability: string;
     roomType: string;
+    bedType: string;
 }
+
+// Create a memoized RoomCard component for better performance
+const RoomCard = memo(({
+    room,
+    getFeatureIcon,
+    router,
+    index = 0
+}: {
+    room: UIRoom;
+    getFeatureIcon: (feature: string) => React.ReactNode;
+    router: any;
+    index?: number;
+}) => {
+    return (
+        <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 group">
+            <div className="relative">
+                <div className="relative h-64 overflow-hidden">
+                    <Image
+                        src={room.image || "/placeholder.svg"}
+                        alt={room.name}
+                        fill
+                        loading={index < 3 ? "eager" : "lazy"} // Only load first 3 images eagerly
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        placeholder="blur"
+                        blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNzAwIiBoZWlnaHQ9IjQ3NSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
+                    />
+                </div>
+            </div>
+
+            <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-primary transition-colors">
+                            {room.roomType}
+                        </h3>
+                        <div className="flex items-center mb-1">
+                            <Badge variant="outline" className="text-xs font-medium bg-blue-50 text-blue-700 border-blue-200">
+                                Room {room.name}
+                            </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{room.description}</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 mb-4 text-sm text-gray-600">
+                    <div className="flex items-center">
+                        <Users className="w-4 h-4 mr-1" />
+                        <span>{room.capacity} guests</span>
+                    </div>
+                </div>
+                <div className="flex items-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-gray-500">
+                        <path d="M2 4v16"></path>
+                        <path d="M2 8h18a2 2 0 0 1 2 2v10"></path>
+                        <path d="M2 17h20"></path>
+                        <path d="M6 8v9"></path>
+                    </svg>
+                    <span className="text-sm font-medium">{room.bedType}</span>
+                </div>
+
+                <div className="flex items-center space-x-3 mb-4">
+                    {room.features.slice(0, 4).map((feature: string) => (
+                        <div
+                            key={feature}
+                            className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full"
+                        >
+                            {getFeatureIcon(feature)}
+                        </div>
+                    ))}
+                    {room.features.length > 4 && (
+                        <span className="text-xs text-gray-500">+{room.features.length - 4} more</span>
+                    )}
+                </div>
+
+                <div className="mb-4">
+                    <Badge
+                        variant="secondary"
+                        className={`text-xs ${room.availability === "Fully booked"
+                            ? "bg-red-100 text-red-800"
+                            : room.availability.includes("left")
+                                ? "bg-orange-100 text-orange-800"
+                                : "bg-green-100 text-green-800"
+                            }`}
+                    >
+                        {room.availability}
+                    </Badge>
+                </div>
+
+                <Separator className="my-4" />
+
+                <div className="flex items-center justify-between">
+                    <div>
+                        <div className="flex items-center space-x-2">
+                            <span className="text-2xl font-bold text-gray-900">₱{room.price.toLocaleString()}</span>
+                        </div>
+                        <span className="text-sm text-gray-600">per night</span>
+                    </div>
+                    <div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => router.push(`/rooms/${room.id}`)}
+                            className="bg-white text-[#6AB19A] border-[#6AB19A] hover:bg-[#6AB19A] hover:text-white transition-colors"
+                        >
+                            Details
+                        </Button>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+});
 
 export default function RoomsPage() {
     const [priceRange, setPriceRange] = useState([500, 3000])
     const [showFilters, setShowFilters] = useState(false)
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-    const [favorites, setFavorites] = useState<string[]>([])
-    const [bookingLoading, setBookingLoading] = useState<string | null>(null)
-    const [visibleRooms, setVisibleRooms] = useState(6)
+    const [visibleRooms, setVisibleRooms] = useState(9)
 
     const { isAuthenticated } = useAuth()
     const router = useRouter()
@@ -161,14 +265,9 @@ export default function RoomsPage() {
                 name: room.name,
                 description: room.description || "Comfortable room with amenities",
                 price: room.pricePerNight,
-                rating: 4.8,
-                reviewCount: 45,
                 image: room.imageUrl || "/placeholder.svg?height=300&width=400",
-                images: [room.imageUrl || "/placeholder.svg?height=300&width=400"],
                 capacity: room.maxOccupancy,
-                floor: `${Math.floor(Math.random() * 5) + 1}nd Floor`,
-                size: `${room.maxOccupancy * 5} sqm`,
-                bedType: room.roomType?.name || (room.maxOccupancy > 1 ? "Double/Twin" : "Single"),
+                bedType: room.bedType || room.roomType?.name || (room.maxOccupancy > 1 ? "Double/Twin" : "Single"),
                 amenities: amenitiesArray,
                 features: [...new Set(featuresArray)], // Remove duplicates
                 availability: room.numberofrooms > 0
@@ -193,51 +292,8 @@ export default function RoomsPage() {
         return featureIconsMap[feature as keyof typeof featureIconsMap] || null;
     }
 
-    const toggleFavorite = (roomId: string) => {
-        setFavorites((prev) => (prev.includes(roomId) ? prev.filter((id) => id !== roomId) : [...prev, roomId]))
-    }
-    const handleBookNow = async (roomId: string) => {
-        // Check if room is available before proceeding
-        const selectedRoom = rooms.find(room => room.id === roomId);
-        if (selectedRoom?.availability === "Fully booked") {
-            toast({
-                title: "Room Unavailable",
-                description: "This room is currently fully booked. Please try another room.",
-                variant: "destructive",
-                duration: 3000,
-            });
-            return;
-        }
-
-        if (!isAuthenticated) {
-            router.push(`/login?redirect=/booking?roomId=${roomId}`);
-            return;
-        }
-
-        try {
-            setBookingLoading(roomId);
-            // Get today and tomorrow's date in YYYY-MM-DD format
-            const today = new Date();
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-
-            const checkIn = today.toISOString().split('T')[0];
-            const checkOut = tomorrow.toISOString().split('T')[0];
-
-            // Navigate to booking page with the room ID and default dates
-            router.push(`/booking?roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=1`);
-        } catch (error) {
-            console.error("Error navigating to booking page:", error);
-            toast({
-                title: "Navigation Error",
-                description: "Failed to navigate to booking page. Please try again.",
-                variant: "destructive",
-                duration: 3000,
-            });
-        } finally {
-            // Ensure loading state is cleared even if there's an error
-            setBookingLoading(null);
-        }
+    const handleRoomDetails = (roomId: string) => {
+        router.push(`/rooms/${roomId}`);
     }
 
     // Mark initial load complete after first data arrives
@@ -247,58 +303,69 @@ export default function RoomsPage() {
         }
     }, [roomsData, initialLoadComplete]);
 
-    // Force refresh when component mounts
+    // Fetch data when component mounts and handle tab visibility
     useEffect(() => {
-        refetchRooms();
-
-        // Set up a polling interval for room data - reduced polling frequency for better performance
-        const intervalId = setInterval(() => {
+        // Initial fetch if data doesn't already exist
+        if (!roomsData) {
             refetchRooms();
-        }, 30000); // Poll every 30 seconds instead of 15 for better performance
+        }
 
-        // Clean up interval on unmount
-        return () => clearInterval(intervalId);
-    }, [refetchRooms]);
+        // Set up polling and visibility handling with a single event listener
+        let lastRefreshTime = Date.now();
+        let intervalId: NodeJS.Timeout;
 
-    // Create an event listener for visibility changes
-    useEffect(() => {
         const handleVisibilityChange = () => {
-            // Only refresh if the tab has been hidden for at least 10 seconds to avoid unnecessary refreshes
             if (document.visibilityState === 'visible') {
-                refetchRooms();
+                const currentTime = Date.now();
+                // Only refresh if it's been at least 30 seconds since the last refresh
+                if (currentTime - lastRefreshTime > 30000) {
+                    refetchRooms();
+                    lastRefreshTime = currentTime;
+                }
+
+                // Set up polling only when tab is visible
+                intervalId = setInterval(() => {
+                    refetchRooms();
+                    lastRefreshTime = Date.now();
+                }, 120000); // Poll every 2 minutes for better performance
+            } else {
+                // Clear interval when tab is hidden
+                clearInterval(intervalId);
             }
         };
 
-        // Listen for when tab becomes visible again
+        // Initial setup based on visibility
+        handleVisibilityChange();
+
+        // Listen for visibility changes
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            clearInterval(intervalId);
         };
-    }, [refetchRooms]);
+    }, [refetchRooms, roomsData]);
 
-    // Show toast notification when room count changes and force immediate refetch
+    // Show toast notification when room availability changes
     useEffect(() => {
         if (lastBookedRoomId) {
-            // Find the booked room details
             const bookedRoom = rooms.find(room => room.id === lastBookedRoomId);
 
             if (bookedRoom) {
-                // Show a toast notification about the update
                 toast({
                     title: "Room availability updated",
-                    description: `${bookedRoom.name} has been booked. There are now ${bookedRoom.availability === "0" ? "no" : bookedRoom.availability} rooms available.`,
+                    description: `Room availability has changed. Refreshing data.`,
                     variant: "default",
                 });
 
-                // Force an immediate refetch to ensure UI is up-to-date
+                // Refresh data to show updated availability
                 refetchRooms();
             }
         }
     }, [lastBookedRoomId, refetchRooms, rooms, toast]);
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-100">
             <Toaster />
             {/* Header */}
             <header className="bg-white border-b sticky top-0 z-40">
@@ -321,9 +388,9 @@ export default function RoomsPage() {
 
             <div className="container mx-auto px-4 py-8">
                 {/* Page Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Find Your Perfect Room</h1>
-                    <p className="text-lg text-gray-600">Discover comfortable accommodations tailored to your needs</p>
+                <div className="mt-4 mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Stay at Kayan</h1>
+                    <p className="text-sm text-gray-600">Our spaces are designed for comfort, creativity, and connection. Whether you're solo, with a partner, or rolling with friends.</p>
                 </div>
 
                 {/* Search and Filter Bar */}
@@ -402,15 +469,15 @@ export default function RoomsPage() {
                                         <div className="space-y-2">
                                             <label className="flex items-center space-x-2">
                                                 <input type="checkbox" className="rounded" />
-                                                <span className="text-sm">Shared Dorm</span>
-                                            </label>
-                                            <label className="flex items-center space-x-2">
-                                                <input type="checkbox" className="rounded" />
                                                 <span className="text-sm">Private Room</span>
                                             </label>
                                             <label className="flex items-center space-x-2">
                                                 <input type="checkbox" className="rounded" />
-                                                <span className="text-sm">Family Room</span>
+                                                <span className="text-sm">Shared Room (4pax max)</span>
+                                            </label>
+                                            <label className="flex items-center space-x-2">
+                                                <input type="checkbox" className="rounded" />
+                                                <span className="text-sm">Shared Room (6pax max)</span>
                                             </label>
                                         </div>
                                     </div>
@@ -434,9 +501,28 @@ export default function RoomsPage() {
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {/* Reduced number of skeleton items from 6 to 3 for faster perceived loading */}
+                            {/* Just show 3 skeleton cards for faster perceived loading */}
                             {[...Array(3)].map((_, i) => (
-                                <RoomCardSkeleton key={i} />
+                                <div key={i} className="h-[480px] bg-white rounded-lg shadow-sm overflow-hidden">
+                                    <div className="h-64 bg-gray-200 animate-pulse"></div>
+                                    <div className="p-6 space-y-4">
+                                        <div className="w-3/4 h-5 bg-gray-200 rounded animate-pulse"></div>
+                                        <div className="w-1/2 h-4 bg-gray-200 rounded animate-pulse"></div>
+                                        <div className="w-full h-4 bg-gray-200 rounded animate-pulse"></div>
+                                        <div className="flex space-x-2">
+                                            {[...Array(4)].map((_, j) => (
+                                                <div key={j} className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+                                            ))}
+                                        </div>
+                                        <div className="pt-4 flex justify-between items-end">
+                                            <div className="space-y-2">
+                                                <div className="w-20 h-6 bg-gray-200 rounded animate-pulse"></div>
+                                                <div className="w-16 h-4 bg-gray-200 rounded animate-pulse"></div>
+                                            </div>
+                                            <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
+                                        </div>
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     </div>
@@ -480,129 +566,37 @@ export default function RoomsPage() {
                         </div>
 
                         {/* Rooms Grid */}
-                        {rooms.length > 0 ? (<div
-                            className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}
-                        >
-                            {rooms.slice(0, visibleRooms).map((room: UIRoom) => (
-                                <Card key={room.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300 group">
-                                    <div className="relative">
-                                        <div className="relative h-64 overflow-hidden">
-                                            <Image
-                                                src={room.image || "/placeholder.svg"}
-                                                alt={room.name}
-                                                fill
-                                                loading="eager" // Changed from lazy to eager for first visible rooms
-                                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                                className="object-cover group-hover:scale-105 transition-transform duration-300"
-                                                placeholder="blur"
-                                                blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNzAwIiBoZWlnaHQ9IjQ3NSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
-                                            />
-
-
-                                        </div>
-                                    </div>
-
-                                    <CardContent className="p-6">
-                                        <div className="flex items-start justify-between mb-3">
-                                            <div className="flex-1">
-                                                <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-primary transition-colors">
-                                                    {room.roomType}
-                                                </h3>
-                                                <div className="flex items-center mb-1">
-                                                    <Badge variant="outline" className="text-xs font-medium bg-blue-50 text-blue-700 border-blue-200">
-                                                        Room {room.name}
-                                                    </Badge>
-                                                </div>                    <p className="text-sm text-gray-600 mb-2">{room.description}</p>
-                                            </div>
-                                        </div>                    {/* Room Details */}
-                                        <div className="grid grid-cols-1 gap-4 mb-4 text-sm text-gray-600">
-                                            <div className="flex items-center">
-                                                <Users className="w-4 h-4 mr-1" />
-                                                <span>{room.capacity} guests</span>
-                                            </div>
-                                        </div>{/* Bed Type */}
-                                        <div className="flex items-center mb-4">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 text-gray-500">
-                                                <path d="M2 4v16"></path>
-                                                <path d="M2 8h18a2 2 0 0 1 2 2v10"></path>
-                                                <path d="M2 17h20"></path>
-                                                <path d="M6 8v9"></path>
-                                            </svg>
-                                            <span className="text-sm font-medium">{room.bedType}</span>
-                                        </div>
-
-                                        {/* Features */}
-                                        <div className="flex items-center space-x-3 mb-4">
-                                            {room.features.slice(0, 4).map((feature: string) => (
-                                                <div
-                                                    key={feature}
-                                                    className="flex items-center justify-center w-8 h-8 bg-gray-100 rounded-full"
-                                                >
-                                                    {getFeatureIcon(feature)}
-                                                </div>
-                                            ))}
-                                            {room.features.length > 4 && (
-                                                <span className="text-xs text-gray-500">+{room.features.length - 4} more</span>
-                                            )}
-                                        </div>
-
-                                        {/* Availability */}
-                                        <div className="mb-4">
-                                            <Badge
-                                                variant="secondary"
-                                                className={`text-xs ${room.availability === "Fully booked"
-                                                    ? "bg-red-100 text-red-800"
-                                                    : room.availability.includes("left")
-                                                        ? "bg-orange-100 text-orange-800"
-                                                        : "bg-green-100 text-green-800"
-                                                    }`}
-                                            >
-                                                {room.availability}
-                                            </Badge>
-                                        </div>
-
-                                        <Separator className="my-4" />
-
-                                        {/* Pricing and Actions */}
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <div className="flex items-center space-x-2">
-                                                    <span className="text-2xl font-bold text-gray-900">₱{room.price.toLocaleString()}</span>
-                                                    {room.originalPrice && (
-                                                        <span className="text-sm text-gray-500 line-through">
-                                                            ₱{room.originalPrice.toLocaleString()}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <span className="text-sm text-gray-600">per night</span>
-                                            </div>
-                                            <div>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => router.push(`/rooms/${room.id}`)}
-                                                    className="bg-white text-[#6AB19A] border-[#6AB19A] hover:bg-[#6AB19A] hover:text-white transition-colors"
-                                                >
-                                                    Details
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}            </div>
-                        ) : !roomsData ? (
+                        {rooms.length > 0 ? (
+                            <div className={`grid gap-6 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
+                                {rooms.slice(0, visibleRooms).map((room: UIRoom, index) => (
+                                    <RoomCard
+                                        key={room.id}
+                                        room={room}
+                                        getFeatureIcon={getFeatureIcon}
+                                        router={router}
+                                        index={index}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
                             <div className="text-center py-12">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 mb-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
-                                <h3 className="text-lg font-medium mb-2">Error loading rooms</h3>
-                                <p className="text-gray-500 mb-6">There was a problem fetching room data from the server.</p>
-                                <p className="text-sm text-gray-500 mb-6">{errorMessage ? `Error: ${errorMessage}` : "No room data available"}</p>
-                                <Button onClick={() => window.location.reload()} className="bg-[#6AB19A] hover:bg-[#5a9c87] text-white">Try Again</Button>
+                                <h3 className="text-lg font-medium mb-2">No rooms available</h3>
+                                <p className="text-gray-500 mb-6">
+                                    {!roomsData
+                                        ? "There was a problem fetching room data from the server."
+                                        : "There are currently no rooms available that match your criteria."}
+                                </p>
+                                {errorMessage && <p className="text-sm text-gray-500 mb-6">Error: {errorMessage}</p>}
+                                <Button onClick={() => window.location.reload()} className="bg-[#6AB19A] hover:bg-[#5a9c87] text-white">
+                                    {!roomsData ? "Try Again" : "Refresh"}
+                                </Button>
                             </div>
-                        ) : null}
+                        )}
 
                         {/* Load More */}
                         {rooms.length > 0 && rooms.length > visibleRooms && (
@@ -612,7 +606,7 @@ export default function RoomsPage() {
                                     size="lg"
                                     onClick={() => {
                                         // Increase the batch size for fewer clicks
-                                        const batchSize = Math.min(6, rooms.length - visibleRooms);
+                                        const batchSize = Math.min(9, rooms.length - visibleRooms);
                                         setVisibleRooms(prev => prev + batchSize);
                                     }}
                                 >
@@ -625,4 +619,4 @@ export default function RoomsPage() {
             </div>
         </div>
     )
-}   
+}
