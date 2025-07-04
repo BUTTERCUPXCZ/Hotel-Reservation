@@ -169,10 +169,6 @@ export default function DiscoveryPage() {
                                 Start Your Adventure
                                 <ArrowRight className="ml-2 h-5 w-5" />
                             </Button>
-                            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 px-8 py-3">
-                                <Camera className="mr-2 h-5 w-5" />
-                                View Gallery
-                            </Button>
                         </motion.div>
                     </div>
 

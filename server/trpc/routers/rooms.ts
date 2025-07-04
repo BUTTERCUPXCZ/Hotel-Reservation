@@ -557,7 +557,7 @@ export const roomsRouter = router({
                 // Create the booking
                 const booking = await ctx.db.booking.create({
                     data: {
-                        userId: user.id,
+                        userId: user.email,
                         roomId: input.roomId,
                         checkInDate: input.checkInDate,
                         checkOutDate: input.checkOutDate,

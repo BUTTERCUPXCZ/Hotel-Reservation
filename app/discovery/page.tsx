@@ -169,28 +169,11 @@ export default function DiscoveryPage() {
                                 Start Your Adventure
                                 <ArrowRight className="ml-2 h-5 w-5" />
                             </Button>
-                            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/20 px-8 py-3">
-                                <Camera className="mr-2 h-5 w-5" />
-                                View Gallery
-                            </Button>
+
                         </motion.div>
                     </div>
 
-                    {/* Scroll Indicator */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.6, delay: 1.2 }}
-                        className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
-                    >
-                        <motion.div
-                            animate={{ y: [0, 10, 0] }}
-                            transition={{ duration: 2, repeat: Infinity }}
-                            className="w-6 h-10 border-2 border-white/50 rounded-full flex justify-center"
-                        >
-                            <div className="w-1 h-3 bg-white/50 rounded-full mt-2"></div>
-                        </motion.div>
-                    </motion.div>
+
                 </motion.div>
 
                 <div className="container mx-auto px-4 py-16 max-w-7xl">
@@ -486,7 +469,7 @@ export default function DiscoveryPage() {
                                     </p>
 
                                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                                        <Button variant="outline" className="border-white text-white hover:bg-white/20 px-6 py-3">
+                                        <Button variant="outline" className="bg-[#6AB19A] hover:bg-[#5a9d87] text-white px-6 py-3">
                                             <Calendar className="mr-2 h-5 w-5" />
                                             Event Schedule
                                         </Button>
